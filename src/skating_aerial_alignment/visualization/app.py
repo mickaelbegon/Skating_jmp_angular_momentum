@@ -320,6 +320,7 @@ class SkatingAerialAlignmentApp:
             [],
             color="#17BECF",
             linewidth=2.0,
+            alpha=0.28,
         )
         (self.com_point,) = self.ax_3d.plot(
             [],
@@ -456,6 +457,11 @@ class SkatingAerialAlignmentApp:
         self._update_time_slider_bounds()
 
         time = self.result.time
+        self.com_trajectory_line.set_data(
+            self.result.center_of_mass[:, 0],
+            self.result.center_of_mass[:, 1],
+        )
+        self.com_trajectory_line.set_3d_properties(self.result.center_of_mass[:, 2])
         self.alignment_line.set_data(time, self.result.body_axis_alignment_deg)
         self.salto_line.set_data(time, np.rad2deg(self.result.q[:, 3]))
         self.twist_line.set_data(time, np.rad2deg(self.result.q[:, 5]))
@@ -632,9 +638,6 @@ class SkatingAerialAlignmentApp:
             [pelvis[0], angular_tip[0]], [pelvis[1], angular_tip[1]]
         )
         self.angular_momentum_line.set_3d_properties([pelvis[2], angular_tip[2]])
-        com_history = self.result.center_of_mass[: frame_index + 1]
-        self.com_trajectory_line.set_data(com_history[:, 0], com_history[:, 1])
-        self.com_trajectory_line.set_3d_properties(com_history[:, 2])
         current_com = self.result.center_of_mass[frame_index]
         self.com_point.set_data([current_com[0]], [current_com[1]])
         self.com_point.set_3d_properties([current_com[2]])

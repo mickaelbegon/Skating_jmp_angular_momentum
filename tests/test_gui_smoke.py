@@ -27,6 +27,11 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.twist_inertia_line is not None
         assert app.com_trajectory_line is not None
         assert app.com_point is not None
+        assert app.com_trajectory_line.get_alpha() == pytest.approx(0.28)
+        x_data, y_data, z_data = app.com_trajectory_line.get_data_3d()
+        assert len(x_data) == app.result.time.size
+        assert len(y_data) == app.result.time.size
+        assert len(z_data) == app.result.time.size
         assert len(app.time_cursors) == 5
         assert app.ground_surface is not None
         assert app.precession_cone_line is not None
