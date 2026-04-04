@@ -190,7 +190,16 @@ class SkaterFlightSimulator:
         q0[3] = np.deg2rad(parameters.somersault_tilt_deg)
         q0[4] = np.deg2rad(parameters.inward_tilt_deg)
         q0[6:9] = np.deg2rad(np.asarray(parameters.initial_trunk_angles_deg, dtype=float))
+        q0[2] = self.initial_root_height(q0)
         return q0
+
+    def initial_root_height(self, q: np.ndarray) -> float:
+        """Return the root translation that places the lowest marker on the ground."""
+
+        grounded_q = np.asarray(q, dtype=float).copy()
+        grounded_q[2] = 0.0
+        marker_positions = self.markers(grounded_q)
+        return float(-np.min(marker_positions[:, 2]))
 
     def initial_rotational_velocity(
         self,
@@ -240,38 +249,60 @@ class SkaterFlightSimulator:
     def simulate(self, parameters: FlightSimulationParameters) -> FlightSimulationResult:
         """Integrate the aerial dynamics and return plotting-ready observables."""
 
-        flight_time = self.flight_time_from_takeoff_velocity(parameters.takeoff_vertical_velocity)
+        estimated_flight_time = self.flight_time_from_takeoff_velocity(
+            parameters.takeoff_vertical_velocity
+        )
         sample_count = max(int(parameters.sample_count), 2)
-        if flight_time == 0.0:
+        q0 = self.initial_generalized_coordinates(parameters)
+        qdot0, desired_angular_momentum_world = self.full_initial_velocity(parameters)
+        initial_root_height = float(q0[2])
+        if estimated_flight_time == 0.0:
             time = np.array([0.0], dtype=float)
-            q0 = self.initial_generalized_coordinates(parameters)
-            qdot0, desired_angular_momentum_world = self.full_initial_velocity(parameters)
             tau = np.zeros((1, self.model.nbGeneralizedTorque()), dtype=float)
             q = q0[None, :]
             qdot = qdot0[None, :]
+            flight_time = 0.0
         else:
-            time = np.linspace(0.0, flight_time, sample_count, dtype=float)
-            q0 = self.initial_generalized_coordinates(parameters)
-            qdot0, desired_angular_momentum_world = self.full_initial_velocity(parameters)
             state0 = np.concatenate((q0[3:9], qdot0[3:9]))
+            integration_horizon = max(estimated_flight_time * 1.5, estimated_flight_time + 0.25)
+
+            def ground_event(current_time: float, state: np.ndarray) -> float:
+                return self._ground_clearance(
+                    current_time,
+                    state,
+                    parameters.takeoff_vertical_velocity,
+                    initial_root_height,
+                )
+
+            ground_event.terminal = True
+            ground_event.direction = -1.0
             solution = solve_ivp(
                 fun=lambda current_time, state: self._dynamics(current_time, state, parameters),
-                t_span=(0.0, flight_time),
+                t_span=(0.0, integration_horizon),
                 y0=state0,
-                t_eval=time,
                 method="RK45",
+                dense_output=True,
+                events=ground_event,
                 rtol=1e-8,
                 atol=1e-8,
             )
             if not solution.success:
                 raise RuntimeError(f"Flight integration failed: {solution.message}")
+            if solution.t_events[0].size > 0:
+                flight_time = float(solution.t_events[0][0])
+            else:
+                flight_time = float(solution.t[-1])
+            time = np.linspace(0.0, flight_time, sample_count, dtype=float)
             q, qdot, tau = self._sample_solution(
-                np.asarray(solution.t, dtype=float),
-                np.asarray(solution.y, dtype=float),
+                time,
+                np.asarray(solution.sol(time), dtype=float),
                 parameters,
             )
 
-        q[:, 2] = self.ballistic_height(time, parameters.takeoff_vertical_velocity)
+        q[:, 2] = initial_root_height + self.ballistic_height(
+            time,
+            parameters.takeoff_vertical_velocity,
+        )
         qdot[:, 2] = self.ballistic_velocity(time, parameters.takeoff_vertical_velocity)
 
         markers = np.zeros((time.size, self.model.nbMarkers(), 3), dtype=float)
@@ -429,6 +460,22 @@ class SkaterFlightSimulator:
             )
 
         return q, qdot, tau
+
+    def _ground_clearance(
+        self,
+        time: float,
+        state: np.ndarray,
+        takeoff_vertical_velocity: float,
+        initial_root_height: float,
+    ) -> float:
+        """Return the vertical clearance of the lowest marker above the ground."""
+
+        if time <= 1e-10:
+            return 1.0
+        q = np.zeros(self.model.nbQ(), dtype=float)
+        q[2] = initial_root_height + self.ballistic_height(time, takeoff_vertical_velocity)
+        q[3:9] = state[:ROTATION_STATE_DOF]
+        return float(np.min(self.markers(q)[:, 2]))
 
     @staticmethod
     def _angle_deg(vector_a: np.ndarray, vector_b: np.ndarray) -> float:

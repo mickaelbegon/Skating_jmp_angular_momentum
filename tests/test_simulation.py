@@ -59,6 +59,22 @@ def test_passive_zero_momentum_keeps_the_rotational_state_constant() -> None:
     assert np.allclose(result.tau[:, 6:9], 0.0)
 
 
+def test_takeoff_pose_starts_with_lowest_marker_on_the_ground() -> None:
+    """The initialized model is grounded so the first frame matches the takeoff surface."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            angular_velocity_rps=(0.0, 0.0, 0.0),
+            takeoff_vertical_velocity=0.0,
+            somersault_tilt_deg=10.0,
+            inward_tilt_deg=5.0,
+        )
+    )
+
+    assert np.min(result.markers[0, :, 2]) == pytest.approx(0.0)
+
+
 def test_passive_simulation_preserves_angular_momentum_magnitude() -> None:
     """The zero-torque rotational dynamics conserves angular momentum during flight."""
 
@@ -74,6 +90,23 @@ def test_passive_simulation_preserves_angular_momentum_magnitude() -> None:
 
     magnitudes = np.linalg.norm(result.angular_momentum, axis=1)
     assert np.max(np.abs(magnitudes - magnitudes[0])) < 1e-8
+
+
+def test_simulation_stops_at_first_descending_ground_contact() -> None:
+    """The flight trajectory ends when the lowest marker returns to the ground."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            angular_velocity_rps=(0.0, 0.0, 1.5),
+            takeoff_vertical_velocity=0.60,
+            sample_count=61,
+        )
+    )
+
+    assert result.flight_time > 0.0
+    assert np.min(result.markers[-1, :, 2]) == pytest.approx(0.0, abs=1e-6)
+    assert np.min(result.markers[-2, :, 2]) > 0.0
 
 
 def test_pd_optimization_does_not_worsen_the_starting_controller() -> None:
