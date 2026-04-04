@@ -182,7 +182,14 @@ class SkatingAerialAlignmentApp:
         """Create sliders, buttons, and checkboxes."""
 
         slider_specs = [
-            ("salto_rps", [0.08, 0.20, 0.22, 0.022], "Salto eq. (rot/s)", -2.0, 4.0, 0.0),
+            (
+                "salto_rps",
+                [0.08, 0.20, 0.22, 0.022],
+                "Salto arriere eq. (rot/s)",
+                0.0,
+                0.25,
+                0.0,
+            ),
             ("tilt_rps", [0.08, 0.16, 0.22, 0.022], "Interieur eq. (rot/s)", -2.0, 2.0, 0.0),
             ("twist_rps", [0.08, 0.12, 0.22, 0.022], "Vrille eq. (rot/s)", -4.0, 6.0, 3.0),
             (
