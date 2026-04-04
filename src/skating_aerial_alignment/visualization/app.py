@@ -211,6 +211,13 @@ class SkatingAerialAlignmentApp:
         self.ax_torque.set_ylabel("N.m")
         self.ax_inertia.set_ylabel("kg.m^2")
         self.ax_inertia.set_xlabel("Temps (s)")
+        for axis in (
+            self.ax_alignment,
+            self.ax_rotation,
+            self.ax_trunk,
+            self.ax_torque,
+        ):
+            axis.tick_params(axis="x", labelbottom=False)
 
         self.ax_3d.set_xlabel("x")
         self.ax_3d.set_ylabel("y")

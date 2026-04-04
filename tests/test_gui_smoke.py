@@ -47,6 +47,9 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
         assert app.sliders["salto_rps"].ax.get_position().height < 0.02
         assert app.time_slider.ax.get_position().height < 0.02
+        assert app.ax_inertia.get_xlabel() == "Temps (s)"
+        assert all(label.get_visible() is False for label in app.ax_alignment.get_xticklabels())
+        assert all(label.get_visible() is False for label in app.ax_rotation.get_xticklabels())
         assert app.frames_per_animation_step >= 1
     finally:
         app.animation._draw_was_started = True
