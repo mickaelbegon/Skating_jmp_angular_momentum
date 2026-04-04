@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import biorbd
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.optimize import minimize
 
 from skating_aerial_alignment.modeling import SkaterFlightBiomod
 
@@ -55,6 +56,18 @@ class FlightSimulationResult:
     markers: np.ndarray
     flight_time: float
     equivalent_angular_momentum: np.ndarray
+
+
+@dataclass(frozen=True)
+class PDOptimizationResult:
+    """Result of the sub-optimal PD gain calibration."""
+
+    controller: PDControllerConfiguration
+    objective_value: float
+    iterations: int
+    evaluations: int
+    success: bool
+    message: str
 
 
 class SkaterFlightSimulator:
@@ -286,6 +299,83 @@ class SkaterFlightSimulator:
             markers=markers,
             flight_time=flight_time,
             equivalent_angular_momentum=desired_angular_momentum_world,
+        )
+
+    def trunk_tracking_objective(self, result: FlightSimulationResult) -> float:
+        """Return the scalar objective used to assess trunk stabilization quality."""
+
+        trunk_angles = result.q[:, 6:9]
+        trunk_velocities = result.qdot[:, 6:9]
+        trunk_torques = result.tau[:, 6:9]
+        time = result.time
+        if time.size == 1:
+            angle_cost = float(np.sum(trunk_angles[-1] ** 2))
+            velocity_cost = float(np.sum(trunk_velocities[-1] ** 2))
+            torque_cost = float(np.sum(trunk_torques[-1] ** 2))
+        else:
+            angle_cost = float(np.trapz(np.sum(trunk_angles**2, axis=1), time))
+            velocity_cost = float(np.trapz(np.sum(trunk_velocities**2, axis=1), time))
+            torque_cost = float(np.trapz(np.sum(trunk_torques**2, axis=1), time))
+
+        terminal_cost = float(
+            10.0 * np.sum(trunk_angles[-1] ** 2) + 2.0 * np.sum(trunk_velocities[-1] ** 2)
+        )
+        return angle_cost + 0.2 * velocity_cost + 1e-4 * torque_cost + terminal_cost
+
+    def tune_trunk_controller(
+        self,
+        parameters: FlightSimulationParameters,
+        *,
+        max_iterations: int = 20,
+        optimization_sample_count: int = 61,
+    ) -> PDOptimizationResult:
+        """Tune the trunk PD gains with a sub-optimal simulation-based search."""
+
+        base_parameters = replace(
+            parameters,
+            stabilize_trunk=True,
+            sample_count=max(11, int(optimization_sample_count)),
+        )
+        initial_controller = base_parameters.controller
+        initial_guess = np.array(
+            [
+                *initial_controller.proportional_gains,
+                *initial_controller.derivative_gains,
+            ],
+            dtype=float,
+        )
+        bounds = [(0.0, 600.0), (0.0, 600.0), (0.0, 400.0), (0.0, 80.0), (0.0, 80.0), (0.0, 60.0)]
+
+        def objective(values: np.ndarray) -> float:
+            controller = PDControllerConfiguration(
+                proportional_gains=tuple(float(value) for value in values[:3]),
+                derivative_gains=tuple(float(value) for value in values[3:]),
+                torque_limits=initial_controller.torque_limits,
+            )
+            candidate_parameters = replace(base_parameters, controller=controller)
+            result = self.simulate(candidate_parameters)
+            return self.trunk_tracking_objective(result)
+
+        optimization = minimize(
+            objective,
+            x0=initial_guess,
+            method="L-BFGS-B",
+            bounds=bounds,
+            options={"maxiter": max_iterations},
+        )
+        tuned_values = optimization.x if optimization.x is not None else initial_guess
+        tuned_controller = PDControllerConfiguration(
+            proportional_gains=tuple(float(value) for value in tuned_values[:3]),
+            derivative_gains=tuple(float(value) for value in tuned_values[3:]),
+            torque_limits=initial_controller.torque_limits,
+        )
+        return PDOptimizationResult(
+            controller=tuned_controller,
+            objective_value=float(optimization.fun),
+            iterations=int(getattr(optimization, "nit", 0)),
+            evaluations=int(getattr(optimization, "nfev", 0)),
+            success=bool(optimization.success),
+            message=str(optimization.message),
         )
 
     def _dynamics(

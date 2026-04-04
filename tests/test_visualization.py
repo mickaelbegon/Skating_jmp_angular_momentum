@@ -6,8 +6,15 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from skating_aerial_alignment.simulation import FlightSimulationParameters
-from skating_aerial_alignment.visualization.app import format_status_text, skeleton_connections
+from skating_aerial_alignment.simulation import (
+    FlightSimulationParameters,
+    PDControllerConfiguration,
+)
+from skating_aerial_alignment.visualization.app import (
+    format_inertia_and_controller_text,
+    format_status_text,
+    skeleton_connections,
+)
 
 
 class _DummySimulator:
@@ -46,3 +53,24 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
     assert "Temps de vol" in text
     assert "0.62 m/s" in text
     assert "PD actif" in text
+
+
+def test_inertia_text_mentions_inertias_and_controller_gains() -> None:
+    """The secondary status line exposes inertias and current controller gains."""
+
+    simulator = SimpleNamespace(
+        biomod_builder=SimpleNamespace(principal_moments=lambda: np.array([1.0, 2.0, 3.0]))
+    )
+    parameters = FlightSimulationParameters(
+        stabilize_trunk=True,
+        controller=PDControllerConfiguration(
+            proportional_gains=(10.0, 20.0, 30.0),
+            derivative_gains=(1.0, 2.0, 3.0),
+        ),
+    )
+
+    text = format_inertia_and_controller_text(parameters, simulator, optimization_result=None)
+
+    assert "I = [1.00, 2.00, 3.00]" in text
+    assert "Kp = [10.0, 20.0, 30.0]" in text
+    assert "Kd = [1.0, 2.0, 3.0]" in text

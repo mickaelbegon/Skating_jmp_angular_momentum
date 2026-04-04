@@ -12,6 +12,7 @@ from matplotlib.widgets import Button, CheckButtons, Slider
 from skating_aerial_alignment.simulation import (
     FlightSimulationParameters,
     FlightSimulationResult,
+    PDOptimizationResult,
     SkaterFlightSimulator,
 )
 
@@ -59,6 +60,34 @@ def format_status_text(
     )
 
 
+def format_inertia_and_controller_text(
+    parameters: FlightSimulationParameters,
+    simulator: SkaterFlightSimulator,
+    optimization_result: PDOptimizationResult | None,
+) -> str:
+    """Format the secondary status line with inertias and controller gains."""
+
+    principal_moments = simulator.biomod_builder.principal_moments()
+    kp = parameters.controller.proportional_gains
+    kd = parameters.controller.derivative_gains
+    optimization_text = "PD manuel"
+    if optimization_result is not None:
+        optimization_text = (
+            f"PD auto J={optimization_result.objective_value:.3e} "
+            f"({optimization_result.evaluations} eval.)"
+        )
+    inertia_text = (
+        f"I = [{principal_moments[0]:.2f}, {principal_moments[1]:.2f}, "
+        f"{principal_moments[2]:.2f}] kg.m^2"
+    )
+    return (
+        f"{inertia_text} | "
+        f"Kp = [{kp[0]:.1f}, {kp[1]:.1f}, {kp[2]:.1f}] | "
+        f"Kd = [{kd[0]:.1f}, {kd[1]:.1f}, {kd[2]:.1f}] | "
+        f"{optimization_text}"
+    )
+
+
 class SkatingAerialAlignmentApp:
     """Interactive GUI combining sliders, 3D animation, and temporal plots."""
 
@@ -68,6 +97,7 @@ class SkatingAerialAlignmentApp:
         self.simulator = SkaterFlightSimulator()
         self.parameters = FlightSimulationParameters()
         self.result = self.simulator.simulate(self.parameters)
+        self.optimization_result: PDOptimizationResult | None = None
         self.frame_index = 0
         self.is_paused = False
 
@@ -82,6 +112,16 @@ class SkatingAerialAlignmentApp:
             0.945,
             format_status_text(self.parameters, self.result, self.simulator),
             fontsize=10,
+        )
+        self.details_text_artist = self.figure.text(
+            0.06,
+            0.922,
+            format_inertia_and_controller_text(
+                self.parameters,
+                self.simulator,
+                self.optimization_result,
+            ),
+            fontsize=9,
         )
 
         self._build_axes()
@@ -185,6 +225,10 @@ class SkatingAerialAlignmentApp:
         self.pause_button = Button(pause_axis, "Pause")
         self.pause_button.on_clicked(self._toggle_pause)
 
+        optimize_axis = self.figure.add_axes([0.68, 0.22, 0.08, 0.035])
+        self.optimize_button = Button(optimize_axis, "Auto PD")
+        self.optimize_button.on_clicked(self._optimize_controller)
+
         reset_axis = self.figure.add_axes([0.88, 0.22, 0.08, 0.035])
         self.reset_button = Button(reset_axis, "Reset")
         self.reset_button.on_clicked(self._reset_controls)
@@ -251,6 +295,13 @@ class SkatingAerialAlignmentApp:
         self.status_text_artist.set_text(
             format_status_text(self.parameters, self.result, self.simulator)
         )
+        self.details_text_artist.set_text(
+            format_inertia_and_controller_text(
+                self.parameters,
+                self.simulator,
+                self.optimization_result,
+            )
+        )
 
         time = self.result.time
         self.alignment_line.set_data(time, self.result.body_axis_alignment_deg)
@@ -281,6 +332,7 @@ class SkatingAerialAlignmentApp:
         """Re-simulate after a slider or checkbox update."""
 
         self.parameters = self._collect_parameters()
+        self.optimization_result = None
         self.result = self.simulator.simulate(self.parameters)
         self._refresh_from_result(reset_animation=True)
 
@@ -295,6 +347,8 @@ class SkatingAerialAlignmentApp:
         """Restore the default slider values."""
 
         defaults = FlightSimulationParameters()
+        self.parameters = defaults
+        self.optimization_result = None
         self.sliders["salto_rps"].set_val(defaults.angular_velocity_rps[0])
         self.sliders["tilt_rps"].set_val(defaults.angular_velocity_rps[1])
         self.sliders["twist_rps"].set_val(defaults.angular_velocity_rps[2])
@@ -303,6 +357,26 @@ class SkatingAerialAlignmentApp:
         self.sliders["inward_tilt"].set_val(defaults.inward_tilt_deg)
         if self.stabilization_checkbox.get_status()[0]:
             self.stabilization_checkbox.set_active(0)
+
+    def _optimize_controller(self, _event) -> None:
+        """Run the sub-optimal PD calibration for the current scenario."""
+
+        current_parameters = replace(self._collect_parameters(), stabilize_trunk=True)
+        optimization_result = self.simulator.tune_trunk_controller(
+            current_parameters,
+            max_iterations=20,
+            optimization_sample_count=61,
+        )
+        if not self.stabilization_checkbox.get_status()[0]:
+            self.stabilization_checkbox.set_active(0)
+        self.optimization_result = optimization_result
+        self.parameters = replace(
+            current_parameters,
+            controller=optimization_result.controller,
+            stabilize_trunk=True,
+        )
+        self.result = self.simulator.simulate(self.parameters)
+        self._refresh_from_result(reset_animation=True)
 
     def _set_3d_bounds(self) -> None:
         """Set an equal 3D view box that contains the full animated trajectory."""

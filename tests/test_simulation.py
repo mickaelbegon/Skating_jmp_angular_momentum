@@ -74,3 +74,28 @@ def test_passive_simulation_preserves_angular_momentum_magnitude() -> None:
 
     magnitudes = np.linalg.norm(result.angular_momentum, axis=1)
     assert np.max(np.abs(magnitudes - magnitudes[0])) < 1e-8
+
+
+def test_pd_optimization_does_not_worsen_the_starting_controller() -> None:
+    """The sub-optimal PD search returns a controller no worse than the initial guess."""
+
+    simulator = SkaterFlightSimulator()
+    parameters = FlightSimulationParameters(
+        angular_velocity_rps=(0.0, 0.0, 1.0),
+        takeoff_vertical_velocity=0.50,
+        initial_trunk_angles_deg=(12.0, -8.0, 6.0),
+        stabilize_trunk=True,
+        sample_count=41,
+    )
+    initial_result = simulator.simulate(parameters)
+    initial_objective = simulator.trunk_tracking_objective(initial_result)
+
+    optimization = simulator.tune_trunk_controller(
+        parameters,
+        max_iterations=6,
+        optimization_sample_count=31,
+    )
+
+    assert optimization.objective_value <= initial_objective + 1e-8
+    assert all(gain >= 0.0 for gain in optimization.controller.proportional_gains)
+    assert all(gain >= 0.0 for gain in optimization.controller.derivative_gains)
