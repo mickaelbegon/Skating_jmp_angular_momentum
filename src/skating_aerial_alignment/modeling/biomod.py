@@ -16,6 +16,7 @@ from skating_aerial_alignment.anthropometry import (
 
 TRUNK_PELVIS_FRACTION = 0.35
 TRUNK_THORAX_FRACTION = 0.65
+BACKSPIN_FOOT_LENGTH_SCALE = 0.65
 
 
 @dataclass(frozen=True)
@@ -119,6 +120,11 @@ class SkaterFlightBiomod:
 
         return 9
 
+    def _foot_length(self) -> float:
+        """Return the shortened foot length used for the compact skating avatar."""
+
+        return BACKSPIN_FOOT_LENGTH_SCALE * self.dimensions.foot_length
+
     def _arm_backspin_offsets(
         self,
         side: str,
@@ -151,18 +157,19 @@ class SkaterFlightBiomod:
         """Return fixed joint offsets that create a slightly crossed-leg stance."""
 
         dims = self.dimensions
+        foot_length = self._foot_length()
         sign = 1.0 if side == "left" else -1.0
         knee_offset = (
             -sign * 0.52 * dims.hip_half_width,
-            sign * 0.06 * dims.foot_length,
+            sign * 0.06 * foot_length,
             -0.96 * dims.thigh_length,
         )
         ankle_offset = (
             -sign * 0.58 * dims.hip_half_width,
-            sign * 0.09 * dims.foot_length,
+            sign * 0.09 * foot_length,
             -0.94 * dims.shank_length,
         )
-        toe_offset = (0.0, dims.foot_length, 0.0)
+        toe_offset = (0.0, foot_length, 0.0)
         return knee_offset, ankle_offset, toe_offset
 
     def _trunk_split(
@@ -203,6 +210,7 @@ class SkaterFlightBiomod:
         thigh_mass = self.mass * table["thigh"].mass_fraction
         shank_mass = self.mass * table["shank"].mass_fraction
         foot_mass = self.mass * table["foot"].mass_fraction
+        foot_length = self._foot_length()
 
         segments = [
             SegmentDefinition(
@@ -332,10 +340,10 @@ class SkaterFlightBiomod:
                         parent=f"shank_{side}",
                         translation=ankle_offset,
                         mass=foot_mass,
-                        center_of_mass=(0.0, 0.5 * dims.foot_length, 0.0),
+                        center_of_mass=(0.0, 0.5 * foot_length, 0.0),
                         inertia=_diag_inertia(
                             foot_mass,
-                            dims.foot_length,
+                            foot_length,
                             table["foot"].radii_of_gyration,
                         ),
                     ),

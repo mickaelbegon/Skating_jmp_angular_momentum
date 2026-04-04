@@ -84,6 +84,9 @@ def test_neutral_pose_uses_a_compact_backspin_geometry(tmp_path: Path) -> None:
     wrist_right = markers[marker_index["wrist_right"]]
     ankle_left = markers[marker_index["ankle_left"]]
     ankle_right = markers[marker_index["ankle_right"]]
+    toe_left = markers[marker_index["toe_left"]]
+    toe_right = markers[marker_index["toe_right"]]
+    expected_foot_length = SkaterFlightBiomod()._foot_length()
 
     assert abs(wrist_left[0]) < 0.03
     assert abs(wrist_right[0]) < 0.03
@@ -91,3 +94,5 @@ def test_neutral_pose_uses_a_compact_backspin_geometry(tmp_path: Path) -> None:
     assert np.linalg.norm(wrist_right - sternum) < 0.12
     assert ankle_left[0] < 0.0
     assert ankle_right[0] > 0.0
+    assert toe_left[1] - ankle_left[1] == pytest.approx(expected_foot_length, abs=1e-5)
+    assert toe_right[1] - ankle_right[1] == pytest.approx(expected_foot_length, abs=1e-5)
