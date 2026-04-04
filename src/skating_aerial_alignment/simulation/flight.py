@@ -139,11 +139,17 @@ class SkaterFlightSimulator:
     def angular_momentum_from_rps(
         self,
         angular_velocity_rps: tuple[float, float, float],
+        q: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Convert rotations per second about the initial body axes into angular momentum."""
+        """Convert rotations per second about the global axes into angular momentum."""
 
         angular_velocity = 2.0 * np.pi * np.asarray(angular_velocity_rps, dtype=float)
-        return self.biomod_builder.inertia_tensor_body() @ angular_velocity
+        configuration = (
+            np.asarray(q, dtype=float)
+            if q is not None
+            else np.zeros(self.model.nbQ(), dtype=float)
+        )
+        return self.whole_body_inertia_tensor(configuration) @ angular_velocity
 
     def controller_torques(
         self,
@@ -212,10 +218,9 @@ class SkaterFlightSimulator:
         q0: np.ndarray,
         angular_velocity_rps: tuple[float, float, float],
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Solve the root rotational velocity matching the requested initial angular momentum."""
+        """Solve the root rotational velocity matching the requested global angular momentum."""
 
-        desired_angular_momentum_body = self.angular_momentum_from_rps(angular_velocity_rps)
-        desired_angular_momentum_world = self.body_frame(q0) @ desired_angular_momentum_body
+        desired_angular_momentum_world = self.angular_momentum_from_rps(angular_velocity_rps, q0)
 
         mapping = np.zeros((3, 3), dtype=float)
         qdot = np.zeros(self.model.nbQdot(), dtype=float)

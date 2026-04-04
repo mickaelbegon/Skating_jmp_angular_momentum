@@ -53,14 +53,14 @@ def format_status_text(
 ) -> str:
     """Format the textual simulation summary shown above the plots."""
 
-    angular_momentum_body = simulator.angular_momentum_from_rps(parameters.angular_velocity_rps)
     controller_label = "PD actif" if parameters.stabilize_trunk else "tronc passif"
     return (
         f"Temps de vol ~ {result.flight_time:.3f} s | "
         f"Vz = {parameters.takeoff_vertical_velocity:.2f} m/s | "
         f"Angle initial = {result.initial_body_axis_alignment_deg:.1f} deg | "
-        f"H_corps = [{angular_momentum_body[0]:.2f}, {angular_momentum_body[1]:.2f}, "
-        f"{angular_momentum_body[2]:.2f}] Nms | "
+        f"H_global = [{result.equivalent_angular_momentum[0]:.2f}, "
+        f"{result.equivalent_angular_momentum[1]:.2f}, "
+        f"{result.equivalent_angular_momentum[2]:.2f}] Nms | "
         f"{controller_label}"
     )
 
@@ -188,13 +188,13 @@ class SkatingAerialAlignmentApp:
             (
                 "salto_rps",
                 [0.08, 0.20, 0.22, 0.022],
-                "Salto arriere eq. (rot/s)",
+                "Hx global eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.08, 0.16, 0.22, 0.022], "Interieur eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.08, 0.12, 0.22, 0.022], "Vrille eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.08, 0.16, 0.22, 0.022], "Hy global eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.08, 0.12, 0.22, 0.022], "Hz global eq. (rot/s)", -4.0, 6.0, 3.0),
             (
                 "takeoff_velocity",
                 [0.42, 0.20, 0.22, 0.022],

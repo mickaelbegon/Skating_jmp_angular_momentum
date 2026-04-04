@@ -20,12 +20,6 @@ from skating_aerial_alignment.visualization.app import (
 class _DummySimulator:
     """Minimal simulator stub exposing the formatting dependency."""
 
-    @staticmethod
-    def angular_momentum_from_rps(_angular_velocity_rps):
-        """Return a deterministic pseudo angular momentum for the formatter test."""
-
-        return np.array([1.0, 2.0, 3.0])
-
 
 def test_skeleton_connections_cover_head_upper_limbs_and_lower_limbs() -> None:
     """The 3D skeleton contains the expected anatomical links."""
@@ -48,13 +42,18 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
             takeoff_vertical_velocity=0.62,
             stabilize_trunk=True,
         ),
-        SimpleNamespace(flight_time=0.1264, initial_body_axis_alignment_deg=18.5),
+        SimpleNamespace(
+            flight_time=0.1264,
+            initial_body_axis_alignment_deg=18.5,
+            equivalent_angular_momentum=np.array([1.0, 2.0, 3.0]),
+        ),
         _DummySimulator(),
     )
 
     assert "Temps de vol" in text
     assert "0.62 m/s" in text
     assert "Angle initial" in text
+    assert "H_global" in text
     assert "PD actif" in text
 
 

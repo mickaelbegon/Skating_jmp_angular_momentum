@@ -52,6 +52,26 @@ def test_controller_torques_oppose_trunk_deviation() -> None:
     assert np.allclose(torques, np.array([-10.0, 5.0, -2.0]))
 
 
+def test_angular_momentum_components_are_defined_in_the_global_frame() -> None:
+    """The requested momentum components are interpreted directly in the global frame."""
+
+    simulator = SkaterFlightSimulator()
+    q0 = simulator.initial_generalized_coordinates(
+        FlightSimulationParameters(
+            somersault_tilt_deg=10.0,
+            inward_tilt_deg=8.0,
+        )
+    )
+    requested_rps = (0.2, -0.1, 0.5)
+
+    angular_momentum = simulator.angular_momentum_from_rps(requested_rps, q0)
+    reconstructed = simulator.whole_body_inertia_tensor(q0) @ (
+        2.0 * np.pi * np.asarray(requested_rps, dtype=float)
+    )
+
+    assert np.allclose(angular_momentum, reconstructed)
+
+
 def test_passive_zero_momentum_keeps_the_rotational_state_constant() -> None:
     """Without angular momentum or trunk actuation, the rotational state stays at rest."""
 
