@@ -26,6 +26,11 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.ground_surface is not None
         assert app.precession_cone_line is not None
         assert app.playback_selector.value_selected == "100%"
+        assert app.playback_menu_visible is False
+        assert app.playback_menu_axis.get_visible() is False
+        assert app.speed_button.label.get_text() == "Vitesse 100%"
+        assert app.time_slider.valmin == 0.0
+        assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
         assert app.frames_per_animation_step >= 1
     finally:
         app.animation._draw_was_started = True
@@ -44,6 +49,43 @@ def test_face_mode_recomputes_display_markers_with_zero_twist() -> None:
         expected_markers = app.simulator.markers(expected_q)
 
         assert np.allclose(displayed_markers, expected_markers)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_time_slider_moves_to_the_requested_frame_and_pauses_animation() -> None:
+    """Scrubbing in time updates the displayed frame and pauses the animation."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        target_frame = len(app.result.time) // 2
+        target_time = float(app.result.time[target_frame])
+
+        app.time_slider.set_val(target_time)
+
+        assert app.is_paused is True
+        assert app.pause_button.label.get_text() == "Play"
+        assert app.frame_index == target_frame
+        assert app.time_slider.val == pytest.approx(target_time)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_enabling_stabilization_runs_automatic_pd_tuning() -> None:
+    """Turning on stabilization automatically tunes and applies the PD gains."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        initial_controller = app.parameters.controller
+
+        app.stabilization_checkbox.set_active(0)
+
+        assert app.parameters.stabilize_trunk is True
+        assert app.optimization_result is not None
+        assert app.parameters.controller == app.optimization_result.controller
+        assert app.parameters.controller != initial_controller
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

@@ -108,11 +108,14 @@ class SkatingAerialAlignmentApp:
         self.parameters = FlightSimulationParameters()
         self.result = self.simulator.simulate(self.parameters)
         self.optimization_result: PDOptimizationResult | None = None
+        self._pd_tuning_cache: dict[tuple[float, ...], PDOptimizationResult] = {}
         self.frame_index = 0
         self.is_paused = False
         self.frames_per_animation_step = 1
         self.animation_speed_fraction = 1.0
         self.animation_duration_seconds = 0.0
+        self._updating_time_slider = False
+        self.playback_menu_visible = False
 
         self.figure = plt.figure(figsize=(16, 11))
         self.figure.suptitle(
@@ -138,7 +141,7 @@ class SkatingAerialAlignmentApp:
         )
         self.playback_text_artist = self.figure.text(
             0.68,
-            0.115,
+            0.15,
             "",
             fontsize=9,
         )
@@ -251,19 +254,19 @@ class SkatingAerialAlignmentApp:
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
 
-        optimize_axis = self.figure.add_axes([0.08, 0.07, 0.10, 0.04])
-        self.optimize_button = Button(optimize_axis, "Auto PD")
-        self.optimize_button.on_clicked(self._optimize_controller)
+        speed_button_axis = self.figure.add_axes([0.08, 0.07, 0.12, 0.04])
+        self.speed_button = Button(speed_button_axis, "Vitesse 100%")
+        self.speed_button.on_clicked(self._toggle_playback_menu)
 
-        pause_axis = self.figure.add_axes([0.20, 0.07, 0.10, 0.04])
+        pause_axis = self.figure.add_axes([0.22, 0.07, 0.10, 0.04])
         self.pause_button = Button(pause_axis, "Pause")
         self.pause_button.on_clicked(self._toggle_pause)
 
-        reset_axis = self.figure.add_axes([0.32, 0.07, 0.10, 0.04])
+        reset_axis = self.figure.add_axes([0.34, 0.07, 0.10, 0.04])
         self.reset_button = Button(reset_axis, "Reset")
         self.reset_button.on_clicked(self._reset_controls)
 
-        checkbox_axis = self.figure.add_axes([0.46, 0.04, 0.20, 0.11])
+        checkbox_axis = self.figure.add_axes([0.48, 0.04, 0.20, 0.11])
         self.stabilization_checkbox = CheckButtons(
             checkbox_axis,
             labels=["Stabiliser le tronc", "Avatar de face (vrille=0)"],
@@ -271,13 +274,27 @@ class SkatingAerialAlignmentApp:
         )
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
-        playback_axis = self.figure.add_axes([0.68, 0.04, 0.12, 0.11])
+        playback_axis = self.figure.add_axes([0.08, 0.115, 0.12, 0.09])
         self.playback_selector = RadioButtons(
             playback_axis,
             labels=("100%", "50%", "25%"),
             active=0,
         )
         self.playback_selector.on_clicked(self._on_playback_change)
+        playback_axis.set_visible(False)
+        for child in playback_axis.get_children():
+            child.set_visible(False)
+        self.playback_menu_axis = playback_axis
+
+        time_axis = self.figure.add_axes([0.08, 0.31, 0.88, 0.025])
+        self.time_slider = Slider(
+            time_axis,
+            label="Temps (s)",
+            valmin=0.0,
+            valmax=max(self.result.flight_time, 1e-6),
+            valinit=0.0,
+        )
+        self.time_slider.on_changed(self._on_time_slider_change)
 
     def _build_plot_artists(self) -> None:
         """Initialize the lines that will be updated after each simulation."""
@@ -357,6 +374,41 @@ class SkatingAerialAlignmentApp:
             stabilize_trunk=self._stabilization_enabled(),
         )
 
+    def _parameter_signature_for_tuning(
+        self,
+        parameters: FlightSimulationParameters,
+    ) -> tuple[float, ...]:
+        """Return a cache key describing the scenario that affects PD tuning."""
+
+        return (
+            *parameters.angular_velocity_rps,
+            parameters.takeoff_vertical_velocity,
+            parameters.backward_horizontal_velocity,
+            parameters.somersault_tilt_deg,
+            parameters.inward_tilt_deg,
+            *parameters.initial_trunk_angles_deg,
+            *parameters.initial_trunk_velocity_deg_s,
+        )
+
+    def _simulate_with_current_parameters(self) -> None:
+        """Simulate the current scenario, automatically tuning PD when enabled."""
+
+        if self.parameters.stabilize_trunk:
+            signature = self._parameter_signature_for_tuning(self.parameters)
+            optimization = self._pd_tuning_cache.get(signature)
+            if optimization is None:
+                optimization = self.simulator.tune_trunk_controller(
+                    self.parameters,
+                    max_iterations=20,
+                    optimization_sample_count=61,
+                )
+                self._pd_tuning_cache[signature] = optimization
+            self.optimization_result = optimization
+            self.parameters = replace(self.parameters, controller=optimization.controller)
+        else:
+            self.optimization_result = None
+        self.result = self.simulator.simulate(self.parameters)
+
     def _refresh_from_result(self, *, reset_animation: bool) -> None:
         """Refresh plots after a simulation update."""
 
@@ -374,6 +426,7 @@ class SkatingAerialAlignmentApp:
             )
         )
         self._update_animation_playback()
+        self._update_time_slider_bounds()
 
         time = self.result.time
         self.alignment_line.set_data(time, self.result.body_axis_alignment_deg)
@@ -414,8 +467,7 @@ class SkatingAerialAlignmentApp:
         """Re-simulate after a slider or checkbox update."""
 
         self.parameters = self._collect_parameters()
-        self.optimization_result = None
-        self.result = self.simulator.simulate(self.parameters)
+        self._simulate_with_current_parameters()
         self._refresh_from_result(reset_animation=True)
 
     def _toggle_pause(self, _event) -> None:
@@ -443,34 +495,40 @@ class SkatingAerialAlignmentApp:
                 self.stabilization_checkbox.set_active(index)
         if self.playback_selector.value_selected != "100%":
             self.playback_selector.set_active(0)
-
-    def _optimize_controller(self, _event) -> None:
-        """Run the sub-optimal PD calibration for the current scenario."""
-
-        current_parameters = replace(self._collect_parameters(), stabilize_trunk=True)
-        optimization_result = self.simulator.tune_trunk_controller(
-            current_parameters,
-            max_iterations=20,
-            optimization_sample_count=61,
-        )
-        if not self._stabilization_enabled():
-            self.stabilization_checkbox.set_active(0)
-        self.optimization_result = optimization_result
-        self.parameters = replace(
-            current_parameters,
-            controller=optimization_result.controller,
-            stabilize_trunk=True,
-        )
-        self.result = self.simulator.simulate(self.parameters)
-        self._refresh_from_result(reset_animation=True)
+        if self.playback_menu_visible:
+            self._set_playback_menu_visible(False)
 
     def _on_playback_change(self, label: str) -> None:
         """Update the playback speed from the speed selector."""
 
         speed_map = {"100%": 1.0, "50%": 0.5, "25%": 0.25}
         self.animation_speed_fraction = speed_map[label]
+        self.speed_button.label.set_text(f"Vitesse {label}")
         self._update_animation_playback()
+        self._set_playback_menu_visible(False)
         self.figure.canvas.draw_idle()
+
+    def _toggle_playback_menu(self, _event) -> None:
+        """Show or hide the playback-speed popup menu."""
+
+        self._set_playback_menu_visible(not self.playback_menu_visible)
+        self.figure.canvas.draw_idle()
+
+    def _set_playback_menu_visible(self, visible: bool) -> None:
+        """Set the visibility of the playback popup menu."""
+
+        self.playback_menu_visible = visible
+        self.playback_menu_axis.set_visible(visible)
+        for child in self.playback_menu_axis.get_children():
+            child.set_visible(visible)
+
+    def _update_time_slider_bounds(self) -> None:
+        """Synchronize the time slider bounds with the current simulation."""
+
+        self.time_slider.valmin = 0.0
+        self.time_slider.valmax = max(self.result.flight_time, 1e-6)
+        self.time_slider.ax.set_xlim(self.time_slider.valmin, self.time_slider.valmax)
+        self._set_time_slider_value(self.result.time[self.frame_index])
 
     def _set_3d_bounds(self) -> None:
         """Set an equal 3D view box that contains the full animated trajectory."""
@@ -547,6 +605,7 @@ class SkatingAerialAlignmentApp:
 
         for cursor in self.time_cursors:
             cursor.set_xdata([time, time])
+        self._set_time_slider_value(time)
 
     def _animate(self, _frame: int):
         """Advance the animation if it is currently playing."""
@@ -557,6 +616,26 @@ class SkatingAerialAlignmentApp:
             )
             self._draw_frame(self.frame_index)
         return []
+
+    def _set_time_slider_value(self, value: float) -> None:
+        """Update the time slider without triggering a recursive redraw."""
+
+        self._updating_time_slider = True
+        try:
+            self.time_slider.set_val(value)
+        finally:
+            self._updating_time_slider = False
+
+    def _on_time_slider_change(self, value: float) -> None:
+        """Move the animation frame according to the time slider."""
+
+        if self._updating_time_slider:
+            return
+        self.is_paused = True
+        self.pause_button.label.set_text("Play")
+        self.frame_index = int(np.argmin(np.abs(self.result.time - float(value))))
+        self._draw_frame(self.frame_index)
+        self.figure.canvas.draw_idle()
 
     def _display_kinematics(self, frame_index: int) -> tuple[np.ndarray, np.ndarray]:
         """Return the marker cloud and longitudinal axis used for display."""
