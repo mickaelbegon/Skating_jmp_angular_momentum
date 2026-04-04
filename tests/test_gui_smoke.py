@@ -51,6 +51,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert all(label.get_visible() is False for label in app.ax_alignment.get_xticklabels())
         assert all(label.get_visible() is False for label in app.ax_rotation.get_xticklabels())
         assert app.frames_per_animation_step >= 1
+        assert app.animation.event_source.interval == app.ANIMATION_TIMER_INTERVAL_MS
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
@@ -87,6 +88,26 @@ def test_time_slider_moves_to_the_requested_frame_and_pauses_animation() -> None
         assert app.pause_button.label.get_text() == "Play"
         assert app.frame_index == target_frame
         assert app.time_slider.val == pytest.approx(target_time)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_animation_stops_at_last_frame_without_looping() -> None:
+    """Playback reaches the last frame, then pauses instead of restarting."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.frame_index = len(app.result.time) - 2
+        app.frames_per_animation_step = 3
+        app.is_paused = False
+        app.pause_button.label.set_text("Pause")
+
+        app._animate(0)
+
+        assert app.frame_index == len(app.result.time) - 1
+        assert app.is_paused is True
+        assert app.pause_button.label.get_text() == "Play"
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

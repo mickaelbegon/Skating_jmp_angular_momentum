@@ -172,7 +172,7 @@ class SkatingAerialAlignmentApp:
         self.animation = FuncAnimation(
             self.figure,
             self._animate,
-            interval=40,
+            interval=self.ANIMATION_TIMER_INTERVAL_MS,
             blit=False,
             cache_frame_data=False,
         )
@@ -769,10 +769,22 @@ class SkatingAerialAlignmentApp:
         """Advance the animation if it is currently playing."""
 
         if not self.is_paused:
-            self.frame_index = (self.frame_index + self.frames_per_animation_step) % len(
-                self.result.time
+            last_frame_index = max(len(self.result.time) - 1, 0)
+            if self.frame_index >= last_frame_index:
+                self.is_paused = True
+                self.pause_button.label.set_text("Play")
+                self.figure.canvas.draw_idle()
+                return []
+
+            self.frame_index = min(
+                self.frame_index + self.frames_per_animation_step,
+                last_frame_index,
             )
             self._draw_frame(self.frame_index)
+            if self.frame_index >= last_frame_index:
+                self.is_paused = True
+                self.pause_button.label.set_text("Play")
+            self.figure.canvas.draw_idle()
         return []
 
     def _set_time_slider_value(self, value: float) -> None:
@@ -845,6 +857,7 @@ class SkatingAerialAlignmentApp:
         """Estimate playback duration and set the animation stepping accordingly."""
 
         self.animation_speed_fraction = max(self.animation_speed_fraction, 1e-6)
+        total_frame_advances = max(len(self.result.time) - 1, 0)
         target_duration = (
             self.result.flight_time / self.animation_speed_fraction
             if self.result.flight_time > 0.0
@@ -856,13 +869,15 @@ class SkatingAerialAlignmentApp:
         )
         self.frames_per_animation_step = max(
             1,
-            int(np.ceil(max(len(self.result.time) - 1, 1) / steps)),
+            int(np.ceil(max(total_frame_advances, 1) / steps)),
+        )
+        animation_step_count = (
+            int(np.ceil(total_frame_advances / self.frames_per_animation_step))
+            if total_frame_advances > 0
+            else 0
         )
         self.animation_duration_seconds = (
-            max(len(self.result.time) - 1, 1)
-            / self.frames_per_animation_step
-            * self.ANIMATION_TIMER_INTERVAL_MS
-            / 1000.0
+            animation_step_count * self.ANIMATION_TIMER_INTERVAL_MS / 1000.0
         )
         self.playback_text_artist.set_text(
             "Lecture: "
