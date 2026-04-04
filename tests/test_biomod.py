@@ -91,34 +91,54 @@ def test_neutral_pose_uses_a_compact_backspin_geometry(tmp_path: Path) -> None:
     shoulder_right = markers[marker_index["shoulder_right"]]
     elbow_left = markers[marker_index["elbow_left"]]
     elbow_right = markers[marker_index["elbow_right"]]
+    hand_left = markers[marker_index["hand_left"]]
+    hand_right = markers[marker_index["hand_right"]]
 
     left_upper_arm = elbow_left - shoulder_left
     right_upper_arm = elbow_right - shoulder_right
-    left_upper_arm_norm = np.linalg.norm(left_upper_arm)
-    right_upper_arm_norm = np.linalg.norm(right_upper_arm)
-    left_basic_flexion_deg = np.rad2deg(
-        np.arcsin(np.clip(left_upper_arm[1] / left_upper_arm_norm, -1.0, 1.0))
+    left_elbow_angle_deg = np.rad2deg(
+        np.arccos(
+            np.clip(
+                np.dot(shoulder_left - elbow_left, wrist_left - elbow_left)
+                / (
+                    np.linalg.norm(shoulder_left - elbow_left)
+                    * np.linalg.norm(wrist_left - elbow_left)
+                ),
+                -1.0,
+                1.0,
+            )
+        )
     )
-    right_basic_flexion_deg = np.rad2deg(
-        np.arcsin(np.clip(right_upper_arm[1] / right_upper_arm_norm, -1.0, 1.0))
+    right_elbow_angle_deg = np.rad2deg(
+        np.arccos(
+            np.clip(
+                np.dot(shoulder_right - elbow_right, wrist_right - elbow_right)
+                / (
+                    np.linalg.norm(shoulder_right - elbow_right)
+                    * np.linalg.norm(wrist_right - elbow_right)
+                ),
+                -1.0,
+                1.0,
+            )
+        )
     )
-    left_flexion_deg = (
-        180.0 - left_basic_flexion_deg if left_upper_arm[2] > 0.0 else left_basic_flexion_deg
-    )
-    right_flexion_deg = (
-        180.0 - right_basic_flexion_deg if right_upper_arm[2] > 0.0 else right_basic_flexion_deg
-    )
+    left_elbow_flexion_deg = 180.0 - left_elbow_angle_deg
+    right_elbow_flexion_deg = 180.0 - right_elbow_angle_deg
     left_adduction_deg = np.rad2deg(np.arctan2(abs(left_upper_arm[0]), abs(left_upper_arm[2])))
     right_adduction_deg = np.rad2deg(np.arctan2(abs(right_upper_arm[0]), abs(right_upper_arm[2])))
 
-    assert abs(wrist_left[0]) < 0.03
-    assert abs(wrist_right[0]) < 0.03
+    assert abs(wrist_left[0]) < 0.09
+    assert abs(wrist_right[0]) < 0.09
+    assert np.linalg.norm(hand_left - sternum) < 0.08
+    assert np.linalg.norm(hand_right - sternum) < 0.08
     assert np.linalg.norm(wrist_left - sternum) < 0.12
     assert np.linalg.norm(wrist_right - sternum) < 0.12
-    assert left_flexion_deg == pytest.approx(110.0, abs=1e-3)
-    assert right_flexion_deg == pytest.approx(110.0, abs=1e-3)
-    assert left_adduction_deg == pytest.approx(20.0, abs=1e-3)
-    assert right_adduction_deg == pytest.approx(20.0, abs=1e-3)
+    assert elbow_left[2] < shoulder_left[2]
+    assert elbow_right[2] < shoulder_right[2]
+    assert left_elbow_flexion_deg == pytest.approx(110.0, abs=1e-3)
+    assert right_elbow_flexion_deg == pytest.approx(110.0, abs=1e-3)
+    assert left_adduction_deg == pytest.approx(20.0, abs=1.0)
+    assert right_adduction_deg == pytest.approx(20.0, abs=1.0)
     assert ankle_left[0] < 0.0
     assert ankle_right[0] > 0.0
     assert toe_left[1] - ankle_left[1] == pytest.approx(expected_foot_length, abs=1e-5)

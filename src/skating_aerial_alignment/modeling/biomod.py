@@ -18,7 +18,8 @@ TRUNK_PELVIS_FRACTION = 0.35
 TRUNK_THORAX_FRACTION = 0.65
 BACKSPIN_FOOT_LENGTH_SCALE = 0.65
 BACKSPIN_ARM_ADDUCTION_DEG = 20.0
-BACKSPIN_ARM_FLEXION_DEG = 110.0
+BACKSPIN_ELBOW_FLEXION_DEG = 110.0
+BACKSPIN_ARM_CARRY_DEG = 15.0
 
 
 @dataclass(frozen=True)
@@ -141,35 +142,45 @@ class SkaterFlightBiomod:
 
         dims = self.dimensions
         sign = 1.0 if side == "left" else -1.0
-        flexion = np.deg2rad(BACKSPIN_ARM_FLEXION_DEG)
         adduction = np.deg2rad(BACKSPIN_ARM_ADDUCTION_DEG)
+        arm_carry = np.deg2rad(BACKSPIN_ARM_CARRY_DEG)
+        elbow_angle = np.deg2rad(180.0 - BACKSPIN_ELBOW_FLEXION_DEG)
 
-        flexed_upper_arm = np.array(
-            [
-                0.0,
-                np.sin(flexion) * dims.upper_arm_length,
-                -np.cos(flexion) * dims.upper_arm_length,
-            ],
-            dtype=float,
-        )
-        adduction_angle = -sign * adduction
         elbow_offset = np.array(
             [
-                flexed_upper_arm[2] * np.sin(adduction_angle),
-                flexed_upper_arm[1],
-                flexed_upper_arm[2] * np.cos(adduction_angle),
+                -sign * dims.upper_arm_length * np.sin(adduction),
+                dims.upper_arm_length * np.sin(arm_carry),
+                -np.sqrt(
+                    max(
+                        dims.upper_arm_length**2
+                        - (dims.upper_arm_length * np.sin(adduction)) ** 2
+                        - (dims.upper_arm_length * np.sin(arm_carry)) ** 2,
+                        0.0,
+                    )
+                ),
             ],
             dtype=float,
         )
-
         sternum_target = np.asarray(self._sternum_position_on_thorax(), dtype=float)
         shoulder_origin = np.array([sign * dims.shoulder_half_width, 0.0, dims.thorax_height])
-        wrist_target = sternum_target - shoulder_origin
-        wrist_offset = wrist_target - elbow_offset
-        hand_tip_offset = np.array(
-            (0.0, 0.02 * dims.thorax_height, -0.12 * dims.hand_length),
+        elbow_origin = shoulder_origin + elbow_offset
+        elbow_to_shoulder = shoulder_origin - elbow_origin
+        elbow_to_shoulder /= np.linalg.norm(elbow_to_shoulder)
+        elbow_to_sternum = sternum_target - elbow_origin
+        elbow_to_sternum /= np.linalg.norm(elbow_to_sternum)
+        cone_direction = elbow_to_sternum - (
+            np.dot(elbow_to_sternum, elbow_to_shoulder) * elbow_to_shoulder
+        )
+        cone_direction /= np.linalg.norm(cone_direction)
+        wrist_offset = dims.forearm_length * (
+            np.cos(elbow_angle) * elbow_to_shoulder + np.sin(elbow_angle) * cone_direction
+        )
+
+        hand_target = sternum_target + np.array(
+            [0.0, 0.03 * dims.thorax_height, -0.03 * dims.thorax_height],
             dtype=float,
         )
+        hand_tip_offset = hand_target - (shoulder_origin + elbow_offset + wrist_offset)
         return tuple(elbow_offset), tuple(wrist_offset), tuple(hand_tip_offset)
 
     def _leg_backspin_offsets(

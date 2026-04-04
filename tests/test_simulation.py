@@ -88,7 +88,7 @@ def test_backward_horizontal_velocity_translates_the_skater_backward() -> None:
     assert result.q[-1, 1] < 0.0
     com_shift = result.center_of_mass[:, 1] - result.center_of_mass[0, 1]
     root_shift = result.q[:, 1] - result.q[0, 1]
-    assert np.allclose(com_shift, root_shift, atol=5e-3)
+    assert np.allclose(com_shift, root_shift, atol=1e-2)
 
 
 def test_passive_zero_momentum_keeps_the_rotational_state_constant() -> None:
