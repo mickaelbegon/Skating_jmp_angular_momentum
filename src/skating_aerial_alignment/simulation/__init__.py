@@ -3,6 +3,7 @@
 from skating_aerial_alignment.simulation.flight import (
     FlightSimulationParameters,
     FlightSimulationResult,
+    InwardTiltOptimizationResult,
     PDControllerConfiguration,
     PDOptimizationResult,
     SkaterFlightSimulator,
@@ -11,6 +12,7 @@ from skating_aerial_alignment.simulation.flight import (
 __all__ = [
     "FlightSimulationParameters",
     "FlightSimulationResult",
+    "InwardTiltOptimizationResult",
     "PDOptimizationResult",
     "PDControllerConfiguration",
     "SkaterFlightSimulator",

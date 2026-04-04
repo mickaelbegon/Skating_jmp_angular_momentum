@@ -39,6 +39,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_menu_visible is False
         assert app.playback_menu_axis.get_visible() is False
         assert app.speed_button.label.get_text() == "Vitesse 100%"
+        assert len(app.stabilization_checkbox.get_status()) == 3
+        assert app._inward_tilt_optimization_enabled() is False
         assert app.time_slider.valmin == 0.0
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
         assert app.frames_per_animation_step >= 1
@@ -96,6 +98,24 @@ def test_enabling_stabilization_runs_automatic_pd_tuning() -> None:
         assert app.optimization_result is not None
         assert app.parameters.controller == app.optimization_result.controller
         assert app.parameters.controller != initial_controller
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_enabling_inward_tilt_optimization_updates_the_slider_and_result() -> None:
+    """Turning on inward-tilt optimization applies the optimized tilt to the scenario."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(2)
+
+        assert app._inward_tilt_optimization_enabled() is True
+        assert app.inward_tilt_optimization_result is not None
+        assert app.parameters.inward_tilt_deg == pytest.approx(
+            app.inward_tilt_optimization_result.inward_tilt_deg
+        )
+        assert app.sliders["inward_tilt"].val == pytest.approx(app.parameters.inward_tilt_deg)
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

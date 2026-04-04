@@ -74,8 +74,14 @@ def test_inertia_text_mentions_inertias_and_controller_gains() -> None:
         ),
     )
 
-    text = format_inertia_and_controller_text(parameters, simulator, optimization_result=None)
+    text = format_inertia_and_controller_text(
+        parameters,
+        simulator,
+        optimization_result=None,
+        inward_tilt_optimization_result=None,
+    )
 
     assert "I = [1.00, 2.00, 3.00]" in text
     assert "Kp = [10.0, 20.0, 30.0]" in text
     assert "Kd = [1.0, 2.0, 3.0]" in text
+    assert "incl. int. manuelle" in text

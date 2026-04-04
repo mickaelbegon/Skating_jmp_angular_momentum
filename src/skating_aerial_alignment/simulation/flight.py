@@ -8,7 +8,7 @@ from pathlib import Path
 import biorbd
 import numpy as np
 from scipy.integrate import solve_ivp
-from scipy.optimize import minimize
+from scipy.optimize import minimize, minimize_scalar
 
 from skating_aerial_alignment.modeling import SkaterFlightBiomod
 
@@ -72,6 +72,17 @@ class PDOptimizationResult:
     controller: PDControllerConfiguration
     objective_value: float
     iterations: int
+    evaluations: int
+    success: bool
+    message: str
+
+
+@dataclass(frozen=True)
+class InwardTiltOptimizationResult:
+    """Result of the inward-tilt search that maximizes the produced twist."""
+
+    inward_tilt_deg: float
+    twist_turns: float
     evaluations: int
     success: bool
     message: str
@@ -435,6 +446,13 @@ class SkaterFlightSimulator:
         )
         return angle_cost + 0.2 * velocity_cost + 1e-4 * torque_cost + terminal_cost
 
+    @staticmethod
+    def twist_accumulation_turns(result: FlightSimulationResult) -> float:
+        """Return the absolute accumulated twist over the flight expressed in turns."""
+
+        twist_angle = float(result.q[-1, 5] - result.q[0, 5])
+        return abs(twist_angle) / (2.0 * np.pi)
+
     def tune_trunk_controller(
         self,
         parameters: FlightSimulationParameters,
@@ -489,6 +507,43 @@ class SkaterFlightSimulator:
             evaluations=int(getattr(optimization, "nfev", 0)),
             success=bool(optimization.success),
             message=str(optimization.message),
+        )
+
+    def optimize_inward_tilt_for_twist(
+        self,
+        parameters: FlightSimulationParameters,
+        *,
+        bounds: tuple[float, float] = (0.0, 30.0),
+        max_iterations: int = 20,
+        optimization_sample_count: int = 61,
+    ) -> InwardTiltOptimizationResult:
+        """Find the inward tilt that maximizes the accumulated twist during flight."""
+
+        base_parameters = replace(
+            parameters,
+            inward_tilt_deg=float(np.clip(parameters.inward_tilt_deg, *bounds)),
+            sample_count=max(11, int(optimization_sample_count)),
+        )
+
+        def objective(inward_tilt_deg: float) -> float:
+            candidate_parameters = replace(base_parameters, inward_tilt_deg=float(inward_tilt_deg))
+            result = self.simulate(candidate_parameters)
+            return -self.twist_accumulation_turns(result)
+
+        optimization = minimize_scalar(
+            objective,
+            bounds=bounds,
+            method="bounded",
+            options={"maxiter": max_iterations, "xatol": 1e-2},
+        )
+        optimal_tilt = float(optimization.x)
+        optimal_result = self.simulate(replace(base_parameters, inward_tilt_deg=optimal_tilt))
+        return InwardTiltOptimizationResult(
+            inward_tilt_deg=optimal_tilt,
+            twist_turns=self.twist_accumulation_turns(optimal_result),
+            evaluations=int(getattr(optimization, "nfev", 0)),
+            success=bool(optimization.success),
+            message=str(getattr(optimization, "message", "")),
         )
 
     def _dynamics(

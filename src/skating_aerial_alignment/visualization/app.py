@@ -12,6 +12,7 @@ from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
 from skating_aerial_alignment.simulation import (
     FlightSimulationParameters,
     FlightSimulationResult,
+    InwardTiltOptimizationResult,
     PDOptimizationResult,
     SkaterFlightSimulator,
 )
@@ -72,6 +73,7 @@ def format_inertia_and_controller_text(
     parameters: FlightSimulationParameters,
     simulator: SkaterFlightSimulator,
     optimization_result: PDOptimizationResult | None,
+    inward_tilt_optimization_result: InwardTiltOptimizationResult | None,
 ) -> str:
     """Format the secondary status line with inertias and controller gains."""
 
@@ -84,6 +86,12 @@ def format_inertia_and_controller_text(
             f"PD auto J={optimization_result.objective_value:.3e} "
             f"({optimization_result.evaluations} eval.)"
         )
+    tilt_optimization_text = "incl. int. manuelle"
+    if inward_tilt_optimization_result is not None:
+        tilt_optimization_text = (
+            f"incl. int. auto = {inward_tilt_optimization_result.inward_tilt_deg:.1f} deg "
+            f"({inward_tilt_optimization_result.twist_turns:.2f} tours)"
+        )
     inertia_text = (
         f"I = [{principal_moments[0]:.2f}, {principal_moments[1]:.2f}, "
         f"{principal_moments[2]:.2f}] kg.m^2"
@@ -92,7 +100,8 @@ def format_inertia_and_controller_text(
         f"{inertia_text} | "
         f"Kp = [{kp[0]:.1f}, {kp[1]:.1f}, {kp[2]:.1f}] | "
         f"Kd = [{kd[0]:.1f}, {kd[1]:.1f}, {kd[2]:.1f}] | "
-        f"{optimization_text}"
+        f"{optimization_text} | "
+        f"{tilt_optimization_text}"
     )
 
 
@@ -111,13 +120,16 @@ class SkatingAerialAlignmentApp:
         self.parameters = FlightSimulationParameters()
         self.result = self.simulator.simulate(self.parameters)
         self.optimization_result: PDOptimizationResult | None = None
+        self.inward_tilt_optimization_result: InwardTiltOptimizationResult | None = None
         self._pd_tuning_cache: dict[tuple[float, ...], PDOptimizationResult] = {}
+        self._inward_tilt_cache: dict[tuple[float, ...], InwardTiltOptimizationResult] = {}
         self.frame_index = 0
         self.is_paused = False
         self.frames_per_animation_step = 1
         self.animation_speed_fraction = 1.0
         self.animation_duration_seconds = 0.0
         self._updating_time_slider = False
+        self._updating_inward_tilt_slider = False
         self.playback_menu_visible = False
 
         self.figure = plt.figure(figsize=(16, 11))
@@ -139,6 +151,7 @@ class SkatingAerialAlignmentApp:
                 self.parameters,
                 self.simulator,
                 self.optimization_result,
+                self.inward_tilt_optimization_result,
             ),
             fontsize=9,
         )
@@ -273,11 +286,15 @@ class SkatingAerialAlignmentApp:
         self.reset_button = Button(reset_axis, "Reset")
         self.reset_button.on_clicked(self._reset_controls)
 
-        checkbox_axis = self.figure.add_axes([0.48, 0.04, 0.20, 0.11])
+        checkbox_axis = self.figure.add_axes([0.48, 0.03, 0.27, 0.14])
         self.stabilization_checkbox = CheckButtons(
             checkbox_axis,
-            labels=["Stabiliser le tronc", "Avatar de face (vrille=0)"],
-            actives=[False, False],
+            labels=[
+                "Stabiliser le tronc",
+                "Avatar de face (vrille=0)",
+                "Optimiser incl. interieure",
+            ],
+            actives=[False, False, False],
         )
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
@@ -418,23 +435,75 @@ class SkatingAerialAlignmentApp:
             *parameters.initial_trunk_velocity_deg_s,
         )
 
+    def _parameter_signature_for_inward_tilt_optimization(
+        self,
+        parameters: FlightSimulationParameters,
+    ) -> tuple[float, ...]:
+        """Return a cache key for the inward-tilt optimization mode."""
+
+        return (
+            *parameters.angular_velocity_rps,
+            parameters.takeoff_vertical_velocity,
+            parameters.backward_horizontal_velocity,
+            parameters.somersault_tilt_deg,
+            *parameters.initial_trunk_angles_deg,
+            *parameters.initial_trunk_velocity_deg_s,
+            float(parameters.stabilize_trunk),
+            *parameters.controller.proportional_gains,
+            *parameters.controller.derivative_gains,
+        )
+
+    def _apply_pd_tuning(
+        self,
+        parameters: FlightSimulationParameters,
+    ) -> FlightSimulationParameters:
+        """Return parameters updated with the auto-tuned PD controller when enabled."""
+
+        if not parameters.stabilize_trunk:
+            self.optimization_result = None
+            return parameters
+
+        signature = self._parameter_signature_for_tuning(parameters)
+        optimization = self._pd_tuning_cache.get(signature)
+        if optimization is None:
+            optimization = self.simulator.tune_trunk_controller(
+                parameters,
+                max_iterations=20,
+                optimization_sample_count=61,
+            )
+            self._pd_tuning_cache[signature] = optimization
+        self.optimization_result = optimization
+        return replace(parameters, controller=optimization.controller)
+
+    def _set_inward_tilt_slider_value(self, value: float) -> None:
+        """Update the inward-tilt slider without recursively re-triggering optimization."""
+
+        self._updating_inward_tilt_slider = True
+        try:
+            self.sliders["inward_tilt"].set_val(value)
+        finally:
+            self._updating_inward_tilt_slider = False
+
     def _simulate_with_current_parameters(self) -> None:
         """Simulate the current scenario, automatically tuning PD when enabled."""
 
-        if self.parameters.stabilize_trunk:
-            signature = self._parameter_signature_for_tuning(self.parameters)
-            optimization = self._pd_tuning_cache.get(signature)
+        self.parameters = self._apply_pd_tuning(self.parameters)
+        if self._inward_tilt_optimization_enabled():
+            signature = self._parameter_signature_for_inward_tilt_optimization(self.parameters)
+            optimization = self._inward_tilt_cache.get(signature)
             if optimization is None:
-                optimization = self.simulator.tune_trunk_controller(
+                optimization = self.simulator.optimize_inward_tilt_for_twist(
                     self.parameters,
                     max_iterations=20,
                     optimization_sample_count=61,
                 )
-                self._pd_tuning_cache[signature] = optimization
-            self.optimization_result = optimization
-            self.parameters = replace(self.parameters, controller=optimization.controller)
+                self._inward_tilt_cache[signature] = optimization
+            self.inward_tilt_optimization_result = optimization
+            self.parameters = replace(self.parameters, inward_tilt_deg=optimization.inward_tilt_deg)
+            self._set_inward_tilt_slider_value(optimization.inward_tilt_deg)
+            self.parameters = self._apply_pd_tuning(self.parameters)
         else:
-            self.optimization_result = None
+            self.inward_tilt_optimization_result = None
         self.result = self.simulator.simulate(self.parameters)
 
     def _refresh_from_result(self, *, reset_animation: bool) -> None:
@@ -451,6 +520,7 @@ class SkatingAerialAlignmentApp:
                 self.parameters,
                 self.simulator,
                 self.optimization_result,
+                self.inward_tilt_optimization_result,
             )
         )
         self._update_animation_playback()
@@ -499,6 +569,8 @@ class SkatingAerialAlignmentApp:
     def _on_parameter_change(self, _value) -> None:
         """Re-simulate after a slider or checkbox update."""
 
+        if self._updating_inward_tilt_slider:
+            return
         self.parameters = self._collect_parameters()
         self._simulate_with_current_parameters()
         self._refresh_from_result(reset_animation=True)
@@ -516,6 +588,7 @@ class SkatingAerialAlignmentApp:
         defaults = FlightSimulationParameters()
         self.parameters = defaults
         self.optimization_result = None
+        self.inward_tilt_optimization_result = None
         self.sliders["salto_rps"].set_val(defaults.angular_velocity_rps[0])
         self.sliders["tilt_rps"].set_val(defaults.angular_velocity_rps[1])
         self.sliders["twist_rps"].set_val(defaults.angular_velocity_rps[2])
@@ -710,6 +783,11 @@ class SkatingAerialAlignmentApp:
         """Return whether the front-view rendering mode is enabled."""
 
         return bool(self.stabilization_checkbox.get_status()[1])
+
+    def _inward_tilt_optimization_enabled(self) -> bool:
+        """Return whether inward tilt should be optimized to maximize twist."""
+
+        return bool(self.stabilization_checkbox.get_status()[2])
 
     def _apply_view_mode(self) -> None:
         """Apply the current 3D camera configuration."""
