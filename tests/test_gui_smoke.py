@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -150,6 +152,26 @@ def test_enabling_inward_tilt_optimization_updates_the_slider_and_result() -> No
             app.inward_tilt_optimization_result.inward_tilt_deg
         )
         assert app.sliders["inward_tilt"].val == pytest.approx(app.parameters.inward_tilt_deg)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_checkbox_click_tolerates_missing_frame_index_payload() -> None:
+    """Malformed Matplotlib hit-test payloads on checkboxes are ignored safely."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        checkbox = app.stabilization_checkbox
+        initial_status = checkbox.get_status()
+        checkbox.ax.contains = lambda event: (True, {})
+        checkbox._frames.contains = lambda event: (True, {})
+        checkbox.labels = []
+
+        event = SimpleNamespace(button=1, x=0.0, y=0.0)
+        checkbox._clicked(event)
+
+        assert checkbox.get_status() == initial_status
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

@@ -19,6 +19,27 @@ from skating_aerial_alignment.simulation import (
 )
 
 
+class SafeCheckButtons(CheckButtons):
+    """CheckButtons variant that ignores incomplete hit-test payloads from Matplotlib."""
+
+    def _clicked(self, event):
+        """Ignore malformed `contains` payloads instead of raising `KeyError`."""
+
+        if self.ignore(event) or event.button != 1 or not self.ax.contains(event)[0]:
+            return
+        frame_details = self._frames.contains(event)[1]
+        frame_indices = list(frame_details.get("ind", []))
+        label_indices = [i for i, text in enumerate(self.labels) if text.contains(event)[0]]
+        candidate_indices = [*frame_indices, *label_indices]
+        if candidate_indices:
+            coords = self._frames.get_offset_transform().transform(self._frames.get_offsets())
+            self.set_active(
+                candidate_indices[
+                    (((event.x, event.y) - coords[candidate_indices]) ** 2).sum(-1).argmin()
+                ]
+            )
+
+
 def skeleton_connections() -> list[tuple[str, str]]:
     """Return the marker pairs used to draw the reduced whole-body skeleton."""
 
@@ -332,7 +353,7 @@ class SkatingAerialAlignmentApp:
         checkbox_axis.set_facecolor("none")
         for spine in checkbox_axis.spines.values():
             spine.set_visible(False)
-        self.stabilization_checkbox = CheckButtons(
+        self.stabilization_checkbox = SafeCheckButtons(
             checkbox_axis,
             labels=[
                 "Stabiliser le tronc",
