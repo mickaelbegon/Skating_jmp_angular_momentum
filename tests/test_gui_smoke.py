@@ -39,6 +39,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_menu_visible is False
         assert app.playback_menu_axis.get_visible() is False
         assert app.speed_button.label.get_text() == "Vitesse 100%"
+        assert len(app.control_section_titles) == 4
+        assert app.control_section_titles[0].get_text() == "Moment cinetique global"
         assert len(app.stabilization_checkbox.get_status()) == 3
         assert app._inward_tilt_optimization_enabled() is False
         assert app.time_slider.valmin == 0.0
