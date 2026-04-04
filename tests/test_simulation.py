@@ -133,6 +133,31 @@ def test_initial_alignment_angle_is_exposed_explicitly() -> None:
     )
 
 
+def test_principal_moments_are_available_during_simulation() -> None:
+    """The simulation exposes the full-body principal moments and longitudinal inertia."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            angular_velocity_rps=(0.0, 0.1, 1.5),
+            takeoff_vertical_velocity=0.50,
+            sample_count=21,
+        )
+    )
+
+    assert result.principal_moments.shape == (21, 3)
+    assert result.inertia_tensor.shape == (21, 3, 3)
+    assert np.all(result.principal_moments > 0.0)
+    assert np.allclose(
+        result.principal_moments[0],
+        np.linalg.eigvalsh(result.inertia_tensor[0]),
+    )
+    assert np.isin(
+        result.longitudinal_principal_moment[0],
+        result.principal_moments[0],
+    ).item()
+
+
 def test_simulation_stops_at_first_descending_ground_contact() -> None:
     """The flight trajectory ends when the lowest marker returns to the ground."""
 

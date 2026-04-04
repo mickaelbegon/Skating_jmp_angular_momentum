@@ -106,7 +106,7 @@ class SkatingAerialAlignmentApp:
         self.frame_index = 0
         self.is_paused = False
 
-        self.figure = plt.figure(figsize=(16, 10))
+        self.figure = plt.figure(figsize=(16, 11))
         self.figure.suptitle(
             "Phase aerienne d'un saut en patinage: alignement moment cinetique / axe du corps",
             fontsize=15,
@@ -146,7 +146,7 @@ class SkatingAerialAlignmentApp:
         """Create the main plotting axes."""
 
         grid = self.figure.add_gridspec(
-            4,
+            5,
             2,
             left=0.06,
             right=0.98,
@@ -160,18 +160,21 @@ class SkatingAerialAlignmentApp:
         self.ax_rotation = self.figure.add_subplot(grid[1, 1])
         self.ax_trunk = self.figure.add_subplot(grid[2, 1], sharex=self.ax_alignment)
         self.ax_torque = self.figure.add_subplot(grid[3, 1], sharex=self.ax_alignment)
+        self.ax_inertia = self.figure.add_subplot(grid[4, 1], sharex=self.ax_alignment)
 
         self.ax_3d.set_title("Animation 3D")
         self.ax_alignment.set_title("Angle(moment cinetique, axe longitudinal)")
         self.ax_rotation.set_title("Vrille et salto")
         self.ax_trunk.set_title("3 DoF du tronc")
         self.ax_torque.set_title("Efforts du tronc")
+        self.ax_inertia.set_title("Moments d'inertie du corps complet")
 
         self.ax_alignment.set_ylabel("deg")
         self.ax_rotation.set_ylabel("deg")
         self.ax_trunk.set_ylabel("deg")
         self.ax_torque.set_ylabel("N.m")
-        self.ax_torque.set_xlabel("Temps (s)")
+        self.ax_inertia.set_ylabel("kg.m^2")
+        self.ax_inertia.set_xlabel("Temps (s)")
 
         self.ax_3d.set_xlabel("x")
         self.ax_3d.set_ylabel("y")
@@ -277,9 +280,28 @@ class SkatingAerialAlignmentApp:
         ]
         self.ax_torque.legend(loc="upper left")
 
+        self.principal_moment_lines = [
+            self.ax_inertia.plot([], [], label=label, linewidth=1.6)[0]
+            for label in ("eig 1", "eig 2", "eig 3")
+        ]
+        (self.longitudinal_inertia_line,) = self.ax_inertia.plot(
+            [],
+            [],
+            color="#2CA02C",
+            linewidth=2.6,
+            label="I longitudinal",
+        )
+        self.ax_inertia.legend(loc="upper left")
+
         self.time_cursors = [
             axis.axvline(0.0, color="black", linestyle="--", linewidth=1.0)
-            for axis in (self.ax_alignment, self.ax_rotation, self.ax_trunk, self.ax_torque)
+            for axis in (
+                self.ax_alignment,
+                self.ax_rotation,
+                self.ax_trunk,
+                self.ax_torque,
+                self.ax_inertia,
+            )
         ]
 
     def _collect_parameters(self) -> FlightSimulationParameters:
@@ -326,6 +348,12 @@ class SkatingAerialAlignmentApp:
             line.set_data(time, values)
         for line, values in zip(self.torque_lines, trunk_torques.T):
             line.set_data(time, values)
+        for line, values in zip(self.principal_moment_lines, self.result.principal_moments.T):
+            line.set_data(time, values)
+        self.longitudinal_inertia_line.set_data(
+            time,
+            self.result.longitudinal_principal_moment,
+        )
 
         self._autoscale_axis(self.ax_alignment, time, [self.result.body_axis_alignment_deg])
         self._autoscale_axis(
@@ -335,6 +363,14 @@ class SkatingAerialAlignmentApp:
         )
         self._autoscale_axis(self.ax_trunk, time, [column for column in trunk_angles_deg.T])
         self._autoscale_axis(self.ax_torque, time, [column for column in trunk_torques.T])
+        self._autoscale_axis(
+            self.ax_inertia,
+            time,
+            [
+                column for column in self.result.principal_moments.T
+            ]
+            + [self.result.longitudinal_principal_moment],
+        )
 
         self._set_3d_bounds()
         self._draw_frame(self.frame_index)

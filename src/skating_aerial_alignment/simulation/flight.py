@@ -56,6 +56,9 @@ class FlightSimulationResult:
     body_axis: np.ndarray
     body_axis_alignment_deg: np.ndarray
     initial_body_axis_alignment_deg: float
+    inertia_tensor: np.ndarray
+    principal_moments: np.ndarray
+    longitudinal_principal_moment: np.ndarray
     markers: np.ndarray
     flight_time: float
     equivalent_angular_momentum: np.ndarray
@@ -249,6 +252,63 @@ class SkaterFlightSimulator:
             True,
         ).to_array()
 
+    def whole_body_inertia_tensor(self, q: np.ndarray) -> np.ndarray:
+        """Return the whole-body inertia tensor about the global center of mass."""
+
+        q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
+        total_mass = 0.0
+        segment_masses = []
+        segment_com_positions = []
+        segment_rotations = []
+        segment_local_inertias = []
+
+        for segment_index in range(self.model.nbSegment()):
+            segment = self.model.segment(segment_index)
+            characteristics = segment.characteristics()
+            mass = float(characteristics.mass())
+            rotation_translation = self.model.globalJCS(q_biorbd, segment_index).to_array()
+            rotation = rotation_translation[:3, :3]
+            translation = rotation_translation[:3, 3]
+            local_com = characteristics.CoM().to_array()
+            segment_com = rotation @ local_com + translation
+
+            total_mass += mass
+            segment_masses.append(mass)
+            segment_com_positions.append(segment_com)
+            segment_rotations.append(rotation)
+            segment_local_inertias.append(characteristics.inertia().to_array())
+
+        whole_body_com = (
+            sum(mass * com for mass, com in zip(segment_masses, segment_com_positions)) / total_mass
+        )
+        inertia_tensor = np.zeros((3, 3), dtype=float)
+        for mass, segment_com, rotation, local_inertia in zip(
+            segment_masses,
+            segment_com_positions,
+            segment_rotations,
+            segment_local_inertias,
+        ):
+            displacement = segment_com - whole_body_com
+            segment_inertia_world = rotation @ local_inertia @ rotation.T
+            inertia_tensor += segment_inertia_world + mass * (
+                np.dot(displacement, displacement) * np.eye(3)
+                - np.outer(displacement, displacement)
+            )
+        return inertia_tensor
+
+    def principal_moments_from_configuration(
+        self,
+        q: np.ndarray,
+    ) -> tuple[np.ndarray, float]:
+        """Return the principal moments and the one aligned with the body longitudinal axis."""
+
+        inertia_tensor = self.whole_body_inertia_tensor(q)
+        eigenvalues, eigenvectors = np.linalg.eigh(inertia_tensor)
+        longitudinal_axis = self.body_frame(q)[:, 2]
+        alignment = np.abs(eigenvectors.T @ longitudinal_axis)
+        longitudinal_index = int(np.argmax(alignment))
+        return np.asarray(eigenvalues, dtype=float), float(eigenvalues[longitudinal_index])
+
     def simulate(self, parameters: FlightSimulationParameters) -> FlightSimulationResult:
         """Integrate the aerial dynamics and return plotting-ready observables."""
 
@@ -312,6 +372,9 @@ class SkaterFlightSimulator:
         angular_momentum = np.zeros((time.size, 3), dtype=float)
         body_axis = np.zeros((time.size, 3), dtype=float)
         alignment = np.zeros(time.size, dtype=float)
+        inertia_tensor = np.zeros((time.size, 3, 3), dtype=float)
+        principal_moments = np.zeros((time.size, 3), dtype=float)
+        longitudinal_principal_moment = np.zeros(time.size, dtype=float)
 
         for frame_index, (q_frame, qdot_frame) in enumerate(zip(q, qdot)):
             markers[frame_index] = self.markers(q_frame)
@@ -321,6 +384,11 @@ class SkaterFlightSimulator:
                 angular_momentum[frame_index],
                 body_axis[frame_index],
             )
+            inertia_tensor[frame_index] = self.whole_body_inertia_tensor(q_frame)
+            (
+                principal_moments[frame_index],
+                longitudinal_principal_moment[frame_index],
+            ) = self.principal_moments_from_configuration(q_frame)
 
         return FlightSimulationResult(
             time=time,
@@ -331,6 +399,9 @@ class SkaterFlightSimulator:
             body_axis=body_axis,
             body_axis_alignment_deg=alignment,
             initial_body_axis_alignment_deg=float(alignment[0]),
+            inertia_tensor=inertia_tensor,
+            principal_moments=principal_moments,
+            longitudinal_principal_moment=longitudinal_principal_moment,
             markers=markers,
             flight_time=flight_time,
             equivalent_angular_momentum=desired_angular_momentum_world,
