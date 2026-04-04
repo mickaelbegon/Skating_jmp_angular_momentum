@@ -421,6 +421,11 @@ class SkaterFlightBiomod:
         parts.extend(
             [
                 _marker_block("pelvis_origin", "pelvis", (0.0, 0.0, 0.0)),
+                _marker_block(
+                    "pelvis_thorax_joint_center",
+                    "pelvis",
+                    (0.0, 0.0, dims.pelvis_height),
+                ),
                 _marker_block("thorax_top", "thorax", (0.0, 0.0, dims.thorax_height)),
                 _marker_block("head_top", "head", (0.0, 0.0, dims.head_height)),
             ]

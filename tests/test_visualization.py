@@ -35,6 +35,8 @@ def test_skeleton_connections_cover_head_upper_limbs_and_lower_limbs() -> None:
     assert ("thorax_top", "head_top") in connections
     assert ("shoulder_left", "elbow_left") in connections
     assert ("hip_right", "knee_right") in connections
+    assert ("hip_left", "pelvis_thorax_joint_center") in connections
+    assert ("shoulder_right", "pelvis_thorax_joint_center") in connections
 
 
 def test_status_text_mentions_flight_time_velocity_and_controller_state() -> None:
