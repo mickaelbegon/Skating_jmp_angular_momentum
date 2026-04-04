@@ -21,6 +21,7 @@ def test_biomod_declares_zero_gravity_and_expected_segments() -> None:
     assert "segment\tthorax" in text
     assert "segment\thead" in text
     assert "marker\tpelvis_thorax_joint_center" in text
+    assert "marker\tsternum" in text
     assert biomod.q_size() == 9
 
 
@@ -61,3 +62,32 @@ def test_generated_biomod_loads_in_biorbd_when_available(tmp_path: Path) -> None
     assert model.nbQ() == 9
     assert model.nbRoot() == 6
     assert "pelvis_thorax_joint_center" in marker_names
+    assert "sternum" in marker_names
+
+
+def test_neutral_pose_uses_a_compact_backspin_geometry(tmp_path: Path) -> None:
+    """The default geometry keeps the wrists on the sternum and the legs slightly crossed."""
+
+    biorbd = pytest.importorskip("biorbd")
+    biomod_path = SkaterFlightBiomod().write(tmp_path / "skater_backspin.bioMod")
+    model = biorbd.Model(str(biomod_path))
+    marker_names = [
+        name.to_string() if hasattr(name, "to_string") else str(name)
+        for name in model.markerNames()
+    ]
+    marker_index = {name: index for index, name in enumerate(marker_names)}
+    q = biorbd.GeneralizedCoordinates(np.zeros(model.nbQ()))
+    markers = np.vstack([marker.to_array() for marker in model.markers(q)])
+
+    sternum = markers[marker_index["sternum"]]
+    wrist_left = markers[marker_index["wrist_left"]]
+    wrist_right = markers[marker_index["wrist_right"]]
+    ankle_left = markers[marker_index["ankle_left"]]
+    ankle_right = markers[marker_index["ankle_right"]]
+
+    assert abs(wrist_left[0]) < 0.03
+    assert abs(wrist_right[0]) < 0.03
+    assert np.linalg.norm(wrist_left - sternum) < 0.12
+    assert np.linalg.norm(wrist_right - sternum) < 0.12
+    assert ankle_left[0] < 0.0
+    assert ankle_right[0] > 0.0

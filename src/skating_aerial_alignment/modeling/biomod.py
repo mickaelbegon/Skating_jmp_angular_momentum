@@ -119,6 +119,52 @@ class SkaterFlightBiomod:
 
         return 9
 
+    def _arm_backspin_offsets(
+        self,
+        side: str,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+        """Return fixed joint offsets that place the arm in a compact backspin pose."""
+
+        dims = self.dimensions
+        sign = 1.0 if side == "left" else -1.0
+        elbow_offset = (
+            -sign * 0.55 * dims.shoulder_half_width,
+            0.18 * dims.thorax_height,
+            -0.42 * dims.upper_arm_length,
+        )
+        wrist_offset = (
+            -sign * 0.40 * dims.shoulder_half_width,
+            -0.02 * dims.thorax_height,
+            -0.18 * dims.forearm_length,
+        )
+        hand_tip_offset = (
+            0.0,
+            0.04 * dims.thorax_height,
+            -0.18 * dims.hand_length,
+        )
+        return elbow_offset, wrist_offset, hand_tip_offset
+
+    def _leg_backspin_offsets(
+        self,
+        side: str,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+        """Return fixed joint offsets that create a slightly crossed-leg stance."""
+
+        dims = self.dimensions
+        sign = 1.0 if side == "left" else -1.0
+        knee_offset = (
+            -sign * 0.52 * dims.hip_half_width,
+            sign * 0.06 * dims.foot_length,
+            -0.96 * dims.thigh_length,
+        )
+        ankle_offset = (
+            -sign * 0.58 * dims.hip_half_width,
+            sign * 0.09 * dims.foot_length,
+            -0.94 * dims.shank_length,
+        )
+        toe_offset = (0.0, dims.foot_length, 0.0)
+        return knee_offset, ankle_offset, toe_offset
+
     def _trunk_split(
         self,
         trunk_parameters: SegmentInertialParameters,
@@ -202,6 +248,8 @@ class SkaterFlightBiomod:
         ]
 
         for side, sign in (("left", 1.0), ("right", -1.0)):
+            elbow_offset, wrist_offset, hand_tip_offset = self._arm_backspin_offsets(side)
+            knee_offset, ankle_offset, _toe_offset = self._leg_backspin_offsets(side)
             segments.extend(
                 [
                     SegmentDefinition(
@@ -209,10 +257,9 @@ class SkaterFlightBiomod:
                         parent="thorax",
                         translation=(sign * dims.shoulder_half_width, 0.0, dims.thorax_height),
                         mass=upper_arm_mass,
-                        center_of_mass=(
-                            0.0,
-                            0.0,
-                            -table["upper_arm"].center_of_mass_fraction * dims.upper_arm_length,
+                        center_of_mass=tuple(
+                            table["upper_arm"].center_of_mass_fraction
+                            * np.asarray(elbow_offset, dtype=float)
                         ),
                         inertia=_diag_inertia(
                             upper_arm_mass,
@@ -223,12 +270,11 @@ class SkaterFlightBiomod:
                     SegmentDefinition(
                         name=f"forearm_{side}",
                         parent=f"upper_arm_{side}",
-                        translation=(0.0, 0.0, -dims.upper_arm_length),
+                        translation=elbow_offset,
                         mass=forearm_mass,
-                        center_of_mass=(
-                            0.0,
-                            0.0,
-                            -table["forearm"].center_of_mass_fraction * dims.forearm_length,
+                        center_of_mass=tuple(
+                            table["forearm"].center_of_mass_fraction
+                            * np.asarray(wrist_offset, dtype=float)
                         ),
                         inertia=_diag_inertia(
                             forearm_mass,
@@ -239,12 +285,11 @@ class SkaterFlightBiomod:
                     SegmentDefinition(
                         name=f"hand_{side}",
                         parent=f"forearm_{side}",
-                        translation=(0.0, 0.0, -dims.forearm_length),
+                        translation=wrist_offset,
                         mass=hand_mass,
-                        center_of_mass=(
-                            0.0,
-                            0.0,
-                            -table["hand"].center_of_mass_fraction * dims.hand_length,
+                        center_of_mass=tuple(
+                            table["hand"].center_of_mass_fraction
+                            * np.asarray(hand_tip_offset, dtype=float)
                         ),
                         inertia=_diag_inertia(
                             hand_mass,
@@ -257,10 +302,9 @@ class SkaterFlightBiomod:
                         parent="pelvis",
                         translation=(sign * dims.hip_half_width, 0.0, 0.0),
                         mass=thigh_mass,
-                        center_of_mass=(
-                            0.0,
-                            0.0,
-                            -table["thigh"].center_of_mass_fraction * dims.thigh_length,
+                        center_of_mass=tuple(
+                            table["thigh"].center_of_mass_fraction
+                            * np.asarray(knee_offset, dtype=float)
                         ),
                         inertia=_diag_inertia(
                             thigh_mass,
@@ -271,12 +315,11 @@ class SkaterFlightBiomod:
                     SegmentDefinition(
                         name=f"shank_{side}",
                         parent=f"thigh_{side}",
-                        translation=(0.0, 0.0, -dims.thigh_length),
+                        translation=knee_offset,
                         mass=shank_mass,
-                        center_of_mass=(
-                            0.0,
-                            0.0,
-                            -table["shank"].center_of_mass_fraction * dims.shank_length,
+                        center_of_mass=tuple(
+                            table["shank"].center_of_mass_fraction
+                            * np.asarray(ankle_offset, dtype=float)
                         ),
                         inertia=_diag_inertia(
                             shank_mass,
@@ -287,7 +330,7 @@ class SkaterFlightBiomod:
                     SegmentDefinition(
                         name=f"foot_{side}",
                         parent=f"shank_{side}",
-                        translation=(0.0, 0.0, -dims.shank_length),
+                        translation=ankle_offset,
                         mass=foot_mass,
                         center_of_mass=(0.0, 0.5 * dims.foot_length, 0.0),
                         inertia=_diag_inertia(
@@ -304,85 +347,36 @@ class SkaterFlightBiomod:
     def inertia_tensor_body(self) -> np.ndarray:
         """Return the whole-system inertia tensor about the CoM in the neutral body frame."""
 
-        segment_centers = {
-            "pelvis": np.array([0.0, 0.0, 0.5 * self.dimensions.pelvis_height]),
-            "thorax": np.array(
-                [0.0, 0.0, self.dimensions.pelvis_height + 0.5 * self.dimensions.thorax_height]
-            ),
-            "head": np.array(
-                [
-                    0.0,
-                    0.0,
-                    self.dimensions.trunk_length
-                    + de_leva_segment_table(self.sex)["head"].center_of_mass_fraction
-                    * self.dimensions.head_height,
-                ]
-            ),
-        }
+        segment_centers: dict[str, np.ndarray] = {}
+        segment_origins = {"base": np.zeros(3, dtype=float)}
+        segments = self.segment_definitions()
+        remaining = {segment.name: segment for segment in segments}
+        while remaining:
+            progressed = False
+            for segment_name, segment in list(remaining.items()):
+                if segment.parent not in segment_origins:
+                    continue
+                origin = segment_origins[segment.parent] + np.asarray(
+                    segment.translation,
+                    dtype=float,
+                )
+                segment_origins[segment_name] = origin
+                segment_centers[segment_name] = origin + np.asarray(
+                    segment.center_of_mass,
+                    dtype=float,
+                )
+                del remaining[segment_name]
+                progressed = True
+            if not progressed:
+                raise RuntimeError("Could not resolve the segment tree while building inertia.")
 
-        table = de_leva_segment_table(self.sex)
-        dims = self.dimensions
-        for side, sign in (("left", 1.0), ("right", -1.0)):
-            segment_centers[f"upper_arm_{side}"] = np.array(
-                [
-                    sign * dims.shoulder_half_width,
-                    0.0,
-                    dims.trunk_length
-                    - table["upper_arm"].center_of_mass_fraction * dims.upper_arm_length,
-                ]
-            )
-            segment_centers[f"forearm_{side}"] = np.array(
-                [
-                    sign * dims.shoulder_half_width,
-                    0.0,
-                    dims.trunk_length
-                    - dims.upper_arm_length
-                    - table["forearm"].center_of_mass_fraction * dims.forearm_length,
-                ]
-            )
-            segment_centers[f"hand_{side}"] = np.array(
-                [
-                    sign * dims.shoulder_half_width,
-                    0.0,
-                    dims.trunk_length
-                    - dims.upper_arm_length
-                    - dims.forearm_length
-                    - table["hand"].center_of_mass_fraction * dims.hand_length,
-                ]
-            )
-            segment_centers[f"thigh_{side}"] = np.array(
-                [
-                    sign * dims.hip_half_width,
-                    0.0,
-                    -table["thigh"].center_of_mass_fraction * dims.thigh_length,
-                ]
-            )
-            segment_centers[f"shank_{side}"] = np.array(
-                [
-                    sign * dims.hip_half_width,
-                    0.0,
-                    -dims.thigh_length - table["shank"].center_of_mass_fraction * dims.shank_length,
-                ]
-            )
-            segment_centers[f"foot_{side}"] = np.array(
-                [
-                    sign * dims.hip_half_width,
-                    0.5 * dims.foot_length,
-                    -dims.thigh_length - dims.shank_length,
-                ]
-            )
-
-        total_mass = sum(segment.mass for segment in self.segment_definitions())
+        total_mass = sum(segment.mass for segment in segments)
         whole_body_com = (
-            sum(
-                segment.mass * segment_centers[segment.name]
-                for segment in self.segment_definitions()
-            )
-            / total_mass
+            sum(segment.mass * segment_centers[segment.name] for segment in segments) / total_mass
         )
 
         inertia_tensor = np.zeros((3, 3), dtype=float)
-        for segment in self.segment_definitions():
+        for segment in segments:
             local_inertia = np.diag(segment.inertia)
             displacement = segment_centers[segment.name] - whole_body_com
             inertia_tensor += local_inertia + segment.mass * (
@@ -427,10 +421,17 @@ class SkaterFlightBiomod:
                     (0.0, 0.0, dims.pelvis_height),
                 ),
                 _marker_block("thorax_top", "thorax", (0.0, 0.0, dims.thorax_height)),
+                _marker_block(
+                    "sternum",
+                    "thorax",
+                    (0.0, 0.07 * dims.thorax_height, 0.55 * dims.thorax_height),
+                ),
                 _marker_block("head_top", "head", (0.0, 0.0, dims.head_height)),
             ]
         )
         for side, sign in (("left", 1.0), ("right", -1.0)):
+            elbow_offset, wrist_offset, hand_tip_offset = self._arm_backspin_offsets(side)
+            knee_offset, ankle_offset, toe_offset = self._leg_backspin_offsets(side)
             parts.extend(
                 [
                     _marker_block(
@@ -441,18 +442,18 @@ class SkaterFlightBiomod:
                     _marker_block(
                         f"elbow_{side}",
                         f"upper_arm_{side}",
-                        (0.0, 0.0, -dims.upper_arm_length),
+                        elbow_offset,
                     ),
                     _marker_block(
                         f"wrist_{side}",
                         f"forearm_{side}",
-                        (0.0, 0.0, -dims.forearm_length),
+                        wrist_offset,
                     ),
-                    _marker_block(f"hand_{side}", f"hand_{side}", (0.0, 0.0, -dims.hand_length)),
+                    _marker_block(f"hand_{side}", f"hand_{side}", hand_tip_offset),
                     _marker_block(f"hip_{side}", "pelvis", (sign * dims.hip_half_width, 0.0, 0.0)),
-                    _marker_block(f"knee_{side}", f"thigh_{side}", (0.0, 0.0, -dims.thigh_length)),
-                    _marker_block(f"ankle_{side}", f"shank_{side}", (0.0, 0.0, -dims.shank_length)),
-                    _marker_block(f"toe_{side}", f"foot_{side}", (0.0, dims.foot_length, 0.0)),
+                    _marker_block(f"knee_{side}", f"thigh_{side}", knee_offset),
+                    _marker_block(f"ankle_{side}", f"shank_{side}", ankle_offset),
+                    _marker_block(f"toe_{side}", f"foot_{side}", toe_offset),
                 ]
             )
         return "".join(parts)
