@@ -58,6 +58,7 @@ def format_status_text(
     return (
         f"Temps de vol ~ {result.flight_time:.3f} s | "
         f"Vz = {parameters.takeoff_vertical_velocity:.2f} m/s | "
+        f"Angle initial = {result.initial_body_axis_alignment_deg:.1f} deg | "
         f"H_corps = [{angular_momentum_body[0]:.2f}, {angular_momentum_body[1]:.2f}, "
         f"{angular_momentum_body[2]:.2f}] Nms | "
         f"{controller_label}"

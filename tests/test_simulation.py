@@ -103,6 +103,25 @@ def test_passive_simulation_preserves_angular_momentum_magnitude() -> None:
     assert np.max(np.abs(magnitudes - magnitudes[0])) < 1e-8
 
 
+def test_initial_alignment_angle_is_exposed_explicitly() -> None:
+    """The initial angle is stored explicitly and matches the first alignment sample."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            angular_velocity_rps=(0.5, 0.25, 2.0),
+            takeoff_vertical_velocity=0.50,
+            somersault_tilt_deg=8.0,
+            inward_tilt_deg=6.0,
+            sample_count=31,
+        )
+    )
+
+    assert result.initial_body_axis_alignment_deg == pytest.approx(
+        result.body_axis_alignment_deg[0]
+    )
+
+
 def test_simulation_stops_at_first_descending_ground_contact() -> None:
     """The flight trajectory ends when the lowest marker returns to the ground."""
 

@@ -48,12 +48,13 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
             takeoff_vertical_velocity=0.62,
             stabilize_trunk=True,
         ),
-        SimpleNamespace(flight_time=0.1264),
+        SimpleNamespace(flight_time=0.1264, initial_body_axis_alignment_deg=18.5),
         _DummySimulator(),
     )
 
     assert "Temps de vol" in text
     assert "0.62 m/s" in text
+    assert "Angle initial" in text
     assert "PD actif" in text
 
 

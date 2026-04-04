@@ -53,6 +53,7 @@ class FlightSimulationResult:
     angular_momentum: np.ndarray
     body_axis: np.ndarray
     body_axis_alignment_deg: np.ndarray
+    initial_body_axis_alignment_deg: float
     markers: np.ndarray
     flight_time: float
     equivalent_angular_momentum: np.ndarray
@@ -327,6 +328,7 @@ class SkaterFlightSimulator:
             angular_momentum=angular_momentum,
             body_axis=body_axis,
             body_axis_alignment_deg=alignment,
+            initial_body_axis_alignment_deg=float(alignment[0]),
             markers=markers,
             flight_time=flight_time,
             equivalent_angular_momentum=desired_angular_momentum_world,
