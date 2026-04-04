@@ -21,6 +21,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.sliders["salto_rps"].valmax == 0.25
         assert len(app.principal_moment_lines) == 3
         assert len(app.time_cursors) == 5
+        assert app.ground_surface is not None
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

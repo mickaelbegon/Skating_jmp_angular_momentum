@@ -256,6 +256,7 @@ class SkatingAerialAlignmentApp:
             (line,) = self.ax_3d.plot([], [], [], color="#0B3C5D", linewidth=2.0)
             self.skeleton_lines.append(line)
 
+        self.ground_surface = None
         (self.body_axis_line,) = self.ax_3d.plot([], [], [], color="#2CA02C", linewidth=2.5)
         (self.angular_momentum_line,) = self.ax_3d.plot([], [], [], color="#D62728", linewidth=2.5)
 
@@ -438,6 +439,36 @@ class SkatingAerialAlignmentApp:
         self.ax_3d.set_ylim(center[1] - radius, center[1] + radius)
         self.ax_3d.set_zlim(center[2] - radius, center[2] + radius)
         self.ax_3d.set_box_aspect((1.0, 1.0, 1.0))
+        self._draw_ground_plane(center[0], center[1], radius)
+
+    def _draw_ground_plane(self, center_x: float, center_y: float, radius: float) -> None:
+        """Draw a visible ground plane at `z = 0` under the animated skater."""
+
+        if self.ground_surface is not None:
+            self.ground_surface.remove()
+
+        x_grid = np.array(
+            [
+                [center_x - radius, center_x + radius],
+                [center_x - radius, center_x + radius],
+            ]
+        )
+        y_grid = np.array(
+            [
+                [center_y - radius, center_y - radius],
+                [center_y + radius, center_y + radius],
+            ]
+        )
+        z_grid = np.zeros((2, 2), dtype=float)
+        self.ground_surface = self.ax_3d.plot_surface(
+            x_grid,
+            y_grid,
+            z_grid,
+            color="#C7B299",
+            alpha=0.28,
+            linewidth=0.0,
+            shade=False,
+        )
 
     def _draw_frame(self, frame_index: int) -> None:
         """Update the 3D skeleton and time cursors for one frame."""
