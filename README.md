@@ -16,3 +16,9 @@ Run the tests with:
 ```bash
 /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m pytest -q
 ```
+
+Launch the GUI with:
+
+```bash
+PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python skating_aerial_alignment_gui.py
+```
