@@ -20,8 +20,13 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.result.time.size > 0
         assert app.sliders["salto_rps"].valmin == 0.0
         assert app.sliders["salto_rps"].valmax == 0.25
-        assert app.sliders["backward_velocity"].valmin == 0.0
+        assert app.sliders["backward_travel"].valmin == 1.0
+        assert app.sliders["backward_travel"].valmax == 5.0
+        assert app.sliders["flight_time"].valmin == 0.4
+        assert app.sliders["flight_time"].valmax == 0.8
         assert app.twist_inertia_line is not None
+        assert app.com_trajectory_line is not None
+        assert app.com_point is not None
         assert len(app.time_cursors) == 5
         assert app.ground_surface is not None
         assert app.precession_cone_line is not None

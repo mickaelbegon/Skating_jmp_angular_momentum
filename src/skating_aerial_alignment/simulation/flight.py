@@ -60,6 +60,7 @@ class FlightSimulationResult:
     twist_rotation_speed: np.ndarray
     twist_inertia_proxy: np.ndarray
     markers: np.ndarray
+    center_of_mass: np.ndarray
     flight_time: float
     equivalent_angular_momentum: np.ndarray
 
@@ -182,6 +183,12 @@ class SkaterFlightSimulator:
 
         q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
         return np.vstack([marker.to_array() for marker in self.model.markers(q_biorbd)])
+
+    def center_of_mass(self, q: np.ndarray) -> np.ndarray:
+        """Return the whole-body center of mass in the global frame."""
+
+        q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
+        return self.model.CoM(q_biorbd).to_array()
 
     def body_frame(self, q: np.ndarray) -> np.ndarray:
         """Estimate the body-fixed orthonormal frame from pelvis, shoulders, and head markers."""
@@ -368,12 +375,14 @@ class SkaterFlightSimulator:
         qdot[:, 1] = -parameters.backward_horizontal_velocity
 
         markers = np.zeros((time.size, self.model.nbMarkers(), 3), dtype=float)
+        center_of_mass = np.zeros((time.size, 3), dtype=float)
         angular_momentum = np.zeros((time.size, 3), dtype=float)
         body_axis = np.zeros((time.size, 3), dtype=float)
         alignment = np.zeros(time.size, dtype=float)
 
         for frame_index, (q_frame, qdot_frame) in enumerate(zip(q, qdot)):
             markers[frame_index] = self.markers(q_frame)
+            center_of_mass[frame_index] = self.center_of_mass(q_frame)
             angular_momentum[frame_index] = self.angular_momentum(q_frame, qdot_frame)
             body_axis[frame_index] = self.body_frame(q_frame)[:, 2]
             alignment[frame_index] = self._angle_deg(
@@ -400,6 +409,7 @@ class SkaterFlightSimulator:
             twist_rotation_speed=twist_rotation_speed,
             twist_inertia_proxy=twist_inertia_proxy,
             markers=markers,
+            center_of_mass=center_of_mass,
             flight_time=flight_time,
             equivalent_angular_momentum=desired_angular_momentum_world,
         )

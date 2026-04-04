@@ -53,6 +53,7 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
 
     assert "Temps de vol" in text
     assert "0.62 m/s" in text
+    assert "Arriere" in text
     assert "0.40 m/s" in text
     assert "Angle initial" in text
     assert "H_global" in text

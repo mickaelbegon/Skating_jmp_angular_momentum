@@ -86,6 +86,9 @@ def test_backward_horizontal_velocity_translates_the_skater_backward() -> None:
 
     assert np.allclose(result.qdot[:, 1], -1.2)
     assert result.q[-1, 1] < 0.0
+    com_shift = result.center_of_mass[:, 1] - result.center_of_mass[0, 1]
+    root_shift = result.q[:, 1] - result.q[0, 1]
+    assert np.allclose(com_shift, root_shift, atol=2e-3)
 
 
 def test_passive_zero_momentum_keeps_the_rotational_state_constant() -> None:
@@ -188,6 +191,22 @@ def test_twist_inertia_proxy_is_available_during_simulation() -> None:
     assert np.any(finite_mask)
     assert np.all(result.twist_inertia_proxy[finite_mask] > 0.0)
     assert np.allclose(result.twist_inertia_proxy[finite_mask], expected_ratio)
+
+
+def test_center_of_mass_trajectory_is_exposed_for_animation() -> None:
+    """The simulation returns a center-of-mass trajectory with one point per frame."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            angular_velocity_rps=(0.0, 0.0, 1.5),
+            takeoff_vertical_velocity=0.55,
+            sample_count=21,
+        )
+    )
+
+    assert result.center_of_mass.shape == (21, 3)
+    assert result.center_of_mass[0, 2] > 0.0
 
 
 def test_simulation_stops_at_first_descending_ground_contact() -> None:

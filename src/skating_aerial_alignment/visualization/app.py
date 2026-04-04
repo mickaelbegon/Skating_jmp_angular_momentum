@@ -54,10 +54,12 @@ def format_status_text(
     """Format the textual simulation summary shown above the plots."""
 
     controller_label = "PD actif" if parameters.stabilize_trunk else "tronc passif"
+    backward_distance = abs(parameters.backward_horizontal_velocity) * result.flight_time
     return (
         f"Temps de vol ~ {result.flight_time:.3f} s | "
         f"Vz = {parameters.takeoff_vertical_velocity:.2f} m/s | "
-        f"Var = {parameters.backward_horizontal_velocity:.2f} m/s | "
+        f"Arriere = {backward_distance:.2f} m "
+        f"({abs(parameters.backward_horizontal_velocity):.2f} m/s) | "
         f"Angle initial = {result.initial_body_axis_alignment_deg:.1f} deg | "
         f"H_global = [{result.equivalent_angular_momentum[0]:.2f}, "
         f"{result.equivalent_angular_momentum[1]:.2f}, "
@@ -100,6 +102,7 @@ class SkatingAerialAlignmentApp:
     ANIMATION_TIMER_INTERVAL_MS = 16
     DEFAULT_VIEW = (18.0, -70.0)
     FACE_VIEW = (8.0, 90.0)
+    DEFAULT_BACKWARD_TRAVEL_M = 1.0
 
     def __init__(self) -> None:
         """Create the figure, controls, and initial simulation."""
@@ -148,6 +151,8 @@ class SkatingAerialAlignmentApp:
 
         self._build_axes()
         self._build_controls()
+        self.parameters = self._collect_parameters()
+        self._simulate_with_current_parameters()
         self._build_plot_artists()
         self._refresh_from_result(reset_animation=True)
 
@@ -205,33 +210,35 @@ class SkatingAerialAlignmentApp:
         slider_specs = [
             (
                 "salto_rps",
-                [0.08, 0.28, 0.22, 0.022],
+                [0.08, 0.28, 0.18, 0.022],
                 "Hx global eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.08, 0.24, 0.22, 0.022], "Hy global eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.08, 0.20, 0.22, 0.022], "Hz global eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.08, 0.24, 0.18, 0.022], "Hy global eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.08, 0.20, 0.18, 0.022], "Hz global eq. (rot/s)", -4.0, 6.0, 3.0),
             (
-                "backward_velocity",
-                [0.08, 0.16, 0.22, 0.022],
-                "Vitesse arriere (m/s)",
-                0.0,
-                3.0,
-                self.parameters.backward_horizontal_velocity,
+                "backward_travel",
+                [0.08, 0.16, 0.18, 0.022],
+                "Arriere (m)",
+                1.0,
+                5.0,
+                self.DEFAULT_BACKWARD_TRAVEL_M,
             ),
             (
-                "takeoff_velocity",
-                [0.42, 0.28, 0.22, 0.022],
-                "Vitesse verticale (m/s)",
-                0.1,
-                3.0,
-                self.parameters.takeoff_vertical_velocity,
+                "flight_time",
+                [0.36, 0.28, 0.18, 0.022],
+                "Temps de vol (s)",
+                0.4,
+                0.8,
+                self.simulator.flight_time_from_takeoff_velocity(
+                    self.parameters.takeoff_vertical_velocity
+                ),
             ),
             (
                 "somersault_tilt",
-                [0.42, 0.24, 0.22, 0.022],
+                [0.36, 0.24, 0.18, 0.022],
                 "Inclinaison salto (deg)",
                 0.0,
                 30.0,
@@ -239,7 +246,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "inward_tilt",
-                [0.42, 0.20, 0.22, 0.022],
+                [0.36, 0.20, 0.18, 0.022],
                 "Inclinaison interieur (deg)",
                 0.0,
                 30.0,
@@ -307,6 +314,22 @@ class SkatingAerialAlignmentApp:
         self.ground_surface = None
         (self.body_axis_line,) = self.ax_3d.plot([], [], [], color="#2CA02C", linewidth=2.5)
         (self.angular_momentum_line,) = self.ax_3d.plot([], [], [], color="#D62728", linewidth=2.5)
+        (self.com_trajectory_line,) = self.ax_3d.plot(
+            [],
+            [],
+            [],
+            color="#17BECF",
+            linewidth=2.0,
+        )
+        (self.com_point,) = self.ax_3d.plot(
+            [],
+            [],
+            [],
+            marker="o",
+            color="#17BECF",
+            markersize=5.5,
+            linestyle="None",
+        )
         (self.precession_cone_line,) = self.ax_3d.plot(
             [],
             [],
@@ -367,8 +390,12 @@ class SkatingAerialAlignmentApp:
                 self.sliders["tilt_rps"].val,
                 self.sliders["twist_rps"].val,
             ),
-            backward_horizontal_velocity=self.sliders["backward_velocity"].val,
-            takeoff_vertical_velocity=self.sliders["takeoff_velocity"].val,
+            backward_horizontal_velocity=(
+                self.sliders["backward_travel"].val / max(self.sliders["flight_time"].val, 1e-6)
+            ),
+            takeoff_vertical_velocity=self.simulator.takeoff_velocity_from_flight_time(
+                self.sliders["flight_time"].val
+            ),
             somersault_tilt_deg=self.sliders["somersault_tilt"].val,
             inward_tilt_deg=self.sliders["inward_tilt"].val,
             stabilize_trunk=self._stabilization_enabled(),
@@ -486,8 +513,10 @@ class SkatingAerialAlignmentApp:
         self.sliders["salto_rps"].set_val(defaults.angular_velocity_rps[0])
         self.sliders["tilt_rps"].set_val(defaults.angular_velocity_rps[1])
         self.sliders["twist_rps"].set_val(defaults.angular_velocity_rps[2])
-        self.sliders["backward_velocity"].set_val(defaults.backward_horizontal_velocity)
-        self.sliders["takeoff_velocity"].set_val(defaults.takeoff_vertical_velocity)
+        self.sliders["backward_travel"].set_val(self.DEFAULT_BACKWARD_TRAVEL_M)
+        self.sliders["flight_time"].set_val(
+            self.simulator.flight_time_from_takeoff_velocity(defaults.takeoff_vertical_velocity)
+        )
         self.sliders["somersault_tilt"].set_val(defaults.somersault_tilt_deg)
         self.sliders["inward_tilt"].set_val(defaults.inward_tilt_deg)
         for index, active in enumerate(self.stabilization_checkbox.get_status()):
@@ -534,6 +563,7 @@ class SkatingAerialAlignmentApp:
         """Set an equal 3D view box that contains the full animated trajectory."""
 
         marker_cloud = self.result.markers.reshape(-1, 3)
+        marker_cloud = np.vstack((marker_cloud, self.result.center_of_mass))
         minima = marker_cloud.min(axis=0)
         maxima = marker_cloud.max(axis=0)
         center = 0.5 * (minima + maxima)
@@ -602,6 +632,12 @@ class SkatingAerialAlignmentApp:
             [pelvis[0], angular_tip[0]], [pelvis[1], angular_tip[1]]
         )
         self.angular_momentum_line.set_3d_properties([pelvis[2], angular_tip[2]])
+        com_history = self.result.center_of_mass[: frame_index + 1]
+        self.com_trajectory_line.set_data(com_history[:, 0], com_history[:, 1])
+        self.com_trajectory_line.set_3d_properties(com_history[:, 2])
+        current_com = self.result.center_of_mass[frame_index]
+        self.com_point.set_data([current_com[0]], [current_com[1]])
+        self.com_point.set_3d_properties([current_com[2]])
 
         for cursor in self.time_cursors:
             cursor.set_xdata([time, time])
