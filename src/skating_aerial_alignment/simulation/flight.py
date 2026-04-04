@@ -201,6 +201,13 @@ class SkaterFlightSimulator:
         q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
         return self.model.CoM(q_biorbd).to_array()
 
+    def center_of_mass_velocity(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
+        """Return the whole-body center-of-mass velocity in the global frame."""
+
+        q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
+        qdot_biorbd = biorbd.GeneralizedVelocity(np.asarray(qdot, dtype=float))
+        return self.model.CoMdot(q_biorbd, qdot_biorbd, True).to_array()
+
     def body_frame(self, q: np.ndarray) -> np.ndarray:
         """Estimate the body-fixed orthonormal frame from pelvis, shoulders, and head markers."""
 
@@ -271,6 +278,102 @@ class SkaterFlightSimulator:
         qdot0[6:9] = np.deg2rad(np.asarray(parameters.initial_trunk_velocity_deg_s, dtype=float))
         return qdot0, desired_angular_momentum_world
 
+    def desired_center_of_mass_state(
+        self,
+        time: float,
+        initial_center_of_mass: np.ndarray,
+        parameters: FlightSimulationParameters,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return the target center-of-mass position and velocity at one time."""
+
+        desired_position = np.asarray(initial_center_of_mass, dtype=float).copy()
+        desired_position[1] -= parameters.backward_horizontal_velocity * time
+        desired_position[2] += float(
+            self.ballistic_height(
+                np.array([time], dtype=float),
+                parameters.takeoff_vertical_velocity,
+            )[0]
+        )
+
+        desired_velocity = np.zeros(3, dtype=float)
+        desired_velocity[1] = -parameters.backward_horizontal_velocity
+        desired_velocity[2] = float(
+            self.ballistic_velocity(
+                np.array([time], dtype=float),
+                parameters.takeoff_vertical_velocity,
+            )[0]
+        )
+        return desired_position, desired_velocity
+
+    def root_translation_from_center_of_mass_target(
+        self,
+        q: np.ndarray,
+        desired_center_of_mass: np.ndarray,
+    ) -> np.ndarray:
+        """Return the root translation that places the CoM at the desired position."""
+
+        q_without_root_translation = np.asarray(q, dtype=float).copy()
+        q_without_root_translation[:3] = 0.0
+        center_of_mass_without_root_translation = self.center_of_mass(q_without_root_translation)
+        return (
+            np.asarray(desired_center_of_mass, dtype=float)
+            - center_of_mass_without_root_translation
+        )
+
+    def root_velocity_from_center_of_mass_target(
+        self,
+        q: np.ndarray,
+        qdot: np.ndarray,
+        desired_center_of_mass_velocity: np.ndarray,
+    ) -> np.ndarray:
+        """Return the root translation velocity that matches the target CoM velocity."""
+
+        q_without_root_translation = np.asarray(q, dtype=float).copy()
+        q_without_root_translation[:3] = 0.0
+        qdot_without_root_translation = np.asarray(qdot, dtype=float).copy()
+        qdot_without_root_translation[:3] = 0.0
+        center_of_mass_velocity_without_root_translation = self.center_of_mass_velocity(
+            q_without_root_translation,
+            qdot_without_root_translation,
+        )
+        return (
+            np.asarray(desired_center_of_mass_velocity, dtype=float)
+            - center_of_mass_velocity_without_root_translation
+        )
+
+    def apply_center_of_mass_trajectory(
+        self,
+        q: np.ndarray,
+        qdot: np.ndarray,
+        time: np.ndarray,
+        parameters: FlightSimulationParameters,
+        initial_center_of_mass: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Adjust the root position and velocity so the CoM follows the requested flight."""
+
+        adjusted_q = np.asarray(q, dtype=float).copy()
+        adjusted_qdot = np.asarray(qdot, dtype=float).copy()
+
+        for frame_index, frame_time in enumerate(np.asarray(time, dtype=float)):
+            desired_center_of_mass, desired_center_of_mass_velocity = (
+                self.desired_center_of_mass_state(
+                    float(frame_time),
+                    initial_center_of_mass,
+                    parameters,
+                )
+            )
+            adjusted_q[frame_index, :3] = self.root_translation_from_center_of_mass_target(
+                adjusted_q[frame_index],
+                desired_center_of_mass,
+            )
+            adjusted_qdot[frame_index, :3] = self.root_velocity_from_center_of_mass_target(
+                adjusted_q[frame_index],
+                adjusted_qdot[frame_index],
+                desired_center_of_mass_velocity,
+            )
+
+        return adjusted_q, adjusted_qdot
+
     def angular_momentum(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
         """Evaluate the whole-body angular momentum about the center of mass."""
 
@@ -333,7 +436,7 @@ class SkaterFlightSimulator:
         sample_count = max(int(parameters.sample_count), 2)
         q0 = self.initial_generalized_coordinates(parameters)
         qdot0, desired_angular_momentum_world = self.full_initial_velocity(parameters)
-        initial_root_height = float(q0[2])
+        initial_center_of_mass = self.center_of_mass(q0)
         if estimated_flight_time == 0.0:
             time = np.array([0.0], dtype=float)
             tau = np.zeros((1, self.model.nbGeneralizedTorque()), dtype=float)
@@ -348,8 +451,8 @@ class SkaterFlightSimulator:
                 return self._ground_clearance(
                     current_time,
                     state,
-                    parameters.takeoff_vertical_velocity,
-                    initial_root_height,
+                    parameters,
+                    initial_center_of_mass,
                 )
 
             ground_event.terminal = True
@@ -377,13 +480,13 @@ class SkaterFlightSimulator:
                 parameters,
             )
 
-        q[:, 2] = initial_root_height + self.ballistic_height(
+        q, qdot = self.apply_center_of_mass_trajectory(
+            q,
+            qdot,
             time,
-            parameters.takeoff_vertical_velocity,
+            parameters,
+            initial_center_of_mass,
         )
-        q[:, 1] = self.backward_displacement(time, parameters.backward_horizontal_velocity)
-        qdot[:, 2] = self.ballistic_velocity(time, parameters.takeoff_vertical_velocity)
-        qdot[:, 1] = -parameters.backward_horizontal_velocity
 
         markers = np.zeros((time.size, self.model.nbMarkers(), 3), dtype=float)
         center_of_mass = np.zeros((time.size, 3), dtype=float)
@@ -602,16 +705,24 @@ class SkaterFlightSimulator:
         self,
         time: float,
         state: np.ndarray,
-        takeoff_vertical_velocity: float,
-        initial_root_height: float,
+        parameters: FlightSimulationParameters,
+        initial_center_of_mass: np.ndarray,
     ) -> float:
         """Return the vertical clearance of the lowest marker above the ground."""
 
         if time <= 1e-10:
             return 1.0
         q = np.zeros(self.model.nbQ(), dtype=float)
-        q[2] = initial_root_height + self.ballistic_height(time, takeoff_vertical_velocity)
         q[3:9] = state[:ROTATION_STATE_DOF]
+        desired_center_of_mass, _ = self.desired_center_of_mass_state(
+            time,
+            initial_center_of_mass,
+            parameters,
+        )
+        q[:3] = self.root_translation_from_center_of_mass_target(
+            q,
+            desired_center_of_mass,
+        )
         return float(np.min(self.markers(q)[:, 2]))
 
     @staticmethod

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -72,23 +74,49 @@ def test_angular_momentum_components_are_defined_in_the_global_frame() -> None:
     assert np.allclose(angular_momentum, reconstructed)
 
 
-def test_backward_horizontal_velocity_translates_the_skater_backward() -> None:
-    """A positive backward speed produces a negative global y translation."""
+def test_backward_horizontal_velocity_sets_the_center_of_mass_speed() -> None:
+    """The backward-speed input prescribes the global CoM motion rather than the root motion."""
 
     simulator = SkaterFlightSimulator()
     result = simulator.simulate(
         FlightSimulationParameters(
+            angular_velocity_rps=(0.2, 0.1, 1.5),
             takeoff_vertical_velocity=0.50,
             backward_horizontal_velocity=1.2,
             sample_count=11,
         )
     )
 
-    assert np.allclose(result.qdot[:, 1], -1.2)
-    assert result.q[-1, 1] < 0.0
     com_shift = result.center_of_mass[:, 1] - result.center_of_mass[0, 1]
-    root_shift = result.q[:, 1] - result.q[0, 1]
-    assert np.allclose(com_shift, root_shift, atol=1e-2)
+    center_of_mass_velocity = np.vstack(
+        [
+            simulator.center_of_mass_velocity(q_frame, qdot_frame)
+            for q_frame, qdot_frame in zip(result.q, result.qdot)
+        ]
+    )
+
+    assert np.allclose(com_shift, -1.2 * result.time, atol=1e-8)
+    assert np.allclose(center_of_mass_velocity[:, 1], -1.2, atol=1e-8)
+
+
+def test_backward_center_of_mass_velocity_does_not_change_angular_momentum() -> None:
+    """Changing the prescribed CoM speed leaves the rotational angular momentum unchanged."""
+
+    simulator = SkaterFlightSimulator()
+    base_parameters = FlightSimulationParameters(
+        angular_velocity_rps=(0.2, -0.1, 1.8),
+        takeoff_vertical_velocity=0.50,
+        somersault_tilt_deg=10.0,
+        inward_tilt_deg=6.0,
+        sample_count=21,
+    )
+
+    stationary_result = simulator.simulate(base_parameters)
+    moving_result = simulator.simulate(replace(base_parameters, backward_horizontal_velocity=1.7))
+
+    assert np.allclose(
+        moving_result.angular_momentum, stationary_result.angular_momentum, atol=1e-8
+    )
 
 
 def test_passive_zero_momentum_keeps_the_rotational_state_constant() -> None:
