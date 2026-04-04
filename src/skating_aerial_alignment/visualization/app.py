@@ -7,7 +7,7 @@ from dataclasses import replace
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
-from matplotlib.widgets import Button, CheckButtons, Slider
+from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
 
 from skating_aerial_alignment.simulation import (
     FlightSimulationParameters,
@@ -57,6 +57,7 @@ def format_status_text(
     return (
         f"Temps de vol ~ {result.flight_time:.3f} s | "
         f"Vz = {parameters.takeoff_vertical_velocity:.2f} m/s | "
+        f"Var = {parameters.backward_horizontal_velocity:.2f} m/s | "
         f"Angle initial = {result.initial_body_axis_alignment_deg:.1f} deg | "
         f"H_global = [{result.equivalent_angular_momentum[0]:.2f}, "
         f"{result.equivalent_angular_momentum[1]:.2f}, "
@@ -96,6 +97,10 @@ def format_inertia_and_controller_text(
 class SkatingAerialAlignmentApp:
     """Interactive GUI combining sliders, 3D animation, and temporal plots."""
 
+    ANIMATION_TIMER_INTERVAL_MS = 16
+    DEFAULT_VIEW = (18.0, -70.0)
+    FACE_VIEW = (8.0, 90.0)
+
     def __init__(self) -> None:
         """Create the figure, controls, and initial simulation."""
 
@@ -105,6 +110,9 @@ class SkatingAerialAlignmentApp:
         self.optimization_result: PDOptimizationResult | None = None
         self.frame_index = 0
         self.is_paused = False
+        self.frames_per_animation_step = 1
+        self.animation_speed_fraction = 1.0
+        self.animation_duration_seconds = 0.0
 
         self.figure = plt.figure(figsize=(16, 11))
         self.figure.suptitle(
@@ -128,6 +136,12 @@ class SkatingAerialAlignmentApp:
             ),
             fontsize=9,
         )
+        self.playback_text_artist = self.figure.text(
+            0.68,
+            0.115,
+            "",
+            fontsize=9,
+        )
 
         self._build_axes()
         self._build_controls()
@@ -141,6 +155,7 @@ class SkatingAerialAlignmentApp:
             blit=False,
             cache_frame_data=False,
         )
+        self._update_animation_playback()
 
     def _build_axes(self) -> None:
         """Create the main plotting axes."""
@@ -151,7 +166,7 @@ class SkatingAerialAlignmentApp:
             left=0.06,
             right=0.98,
             top=0.90,
-            bottom=0.27,
+            bottom=0.35,
             hspace=0.38,
             wspace=0.24,
         )
@@ -187,17 +202,25 @@ class SkatingAerialAlignmentApp:
         slider_specs = [
             (
                 "salto_rps",
-                [0.08, 0.20, 0.22, 0.022],
+                [0.08, 0.28, 0.22, 0.022],
                 "Hx global eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.08, 0.16, 0.22, 0.022], "Hy global eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.08, 0.12, 0.22, 0.022], "Hz global eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.08, 0.24, 0.22, 0.022], "Hy global eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.08, 0.20, 0.22, 0.022], "Hz global eq. (rot/s)", -4.0, 6.0, 3.0),
+            (
+                "backward_velocity",
+                [0.08, 0.16, 0.22, 0.022],
+                "Vitesse arriere (m/s)",
+                0.0,
+                3.0,
+                self.parameters.backward_horizontal_velocity,
+            ),
             (
                 "takeoff_velocity",
-                [0.42, 0.20, 0.22, 0.022],
+                [0.42, 0.28, 0.22, 0.022],
                 "Vitesse verticale (m/s)",
                 0.1,
                 3.0,
@@ -205,7 +228,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "somersault_tilt",
-                [0.42, 0.16, 0.22, 0.022],
+                [0.42, 0.24, 0.22, 0.022],
                 "Inclinaison salto (deg)",
                 0.0,
                 30.0,
@@ -213,7 +236,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "inward_tilt",
-                [0.42, 0.12, 0.22, 0.022],
+                [0.42, 0.20, 0.22, 0.022],
                 "Inclinaison interieur (deg)",
                 0.0,
                 30.0,
@@ -240,13 +263,21 @@ class SkatingAerialAlignmentApp:
         self.reset_button = Button(reset_axis, "Reset")
         self.reset_button.on_clicked(self._reset_controls)
 
-        checkbox_axis = self.figure.add_axes([0.46, 0.055, 0.20, 0.075])
+        checkbox_axis = self.figure.add_axes([0.46, 0.04, 0.20, 0.11])
         self.stabilization_checkbox = CheckButtons(
             checkbox_axis,
-            labels=["Stabiliser le tronc"],
-            actives=[False],
+            labels=["Stabiliser le tronc", "Avatar de face (vrille=0)"],
+            actives=[False, False],
         )
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
+
+        playback_axis = self.figure.add_axes([0.68, 0.04, 0.12, 0.11])
+        self.playback_selector = RadioButtons(
+            playback_axis,
+            labels=("100%", "50%", "25%"),
+            active=0,
+        )
+        self.playback_selector.on_clicked(self._on_playback_change)
 
     def _build_plot_artists(self) -> None:
         """Initialize the lines that will be updated after each simulation."""
@@ -315,10 +346,11 @@ class SkatingAerialAlignmentApp:
                 self.sliders["tilt_rps"].val,
                 self.sliders["twist_rps"].val,
             ),
+            backward_horizontal_velocity=self.sliders["backward_velocity"].val,
             takeoff_vertical_velocity=self.sliders["takeoff_velocity"].val,
             somersault_tilt_deg=self.sliders["somersault_tilt"].val,
             inward_tilt_deg=self.sliders["inward_tilt"].val,
-            stabilize_trunk=self.stabilization_checkbox.get_status()[0],
+            stabilize_trunk=self._stabilization_enabled(),
         )
 
     def _refresh_from_result(self, *, reset_animation: bool) -> None:
@@ -337,6 +369,7 @@ class SkatingAerialAlignmentApp:
                 self.optimization_result,
             )
         )
+        self._update_animation_playback()
 
         time = self.result.time
         self.alignment_line.set_data(time, self.result.body_axis_alignment_deg)
@@ -367,13 +400,12 @@ class SkatingAerialAlignmentApp:
         self._autoscale_axis(
             self.ax_inertia,
             time,
-            [
-                column for column in self.result.principal_moments.T
-            ]
+            [column for column in self.result.principal_moments.T]
             + [self.result.longitudinal_principal_moment],
         )
 
         self._set_3d_bounds()
+        self._apply_view_mode()
         self._draw_frame(self.frame_index)
         self.figure.canvas.draw_idle()
 
@@ -401,11 +433,15 @@ class SkatingAerialAlignmentApp:
         self.sliders["salto_rps"].set_val(defaults.angular_velocity_rps[0])
         self.sliders["tilt_rps"].set_val(defaults.angular_velocity_rps[1])
         self.sliders["twist_rps"].set_val(defaults.angular_velocity_rps[2])
+        self.sliders["backward_velocity"].set_val(defaults.backward_horizontal_velocity)
         self.sliders["takeoff_velocity"].set_val(defaults.takeoff_vertical_velocity)
         self.sliders["somersault_tilt"].set_val(defaults.somersault_tilt_deg)
         self.sliders["inward_tilt"].set_val(defaults.inward_tilt_deg)
-        if self.stabilization_checkbox.get_status()[0]:
-            self.stabilization_checkbox.set_active(0)
+        for index, active in enumerate(self.stabilization_checkbox.get_status()):
+            if active:
+                self.stabilization_checkbox.set_active(index)
+        if self.playback_selector.value_selected != "100%":
+            self.playback_selector.set_active(0)
 
     def _optimize_controller(self, _event) -> None:
         """Run the sub-optimal PD calibration for the current scenario."""
@@ -416,7 +452,7 @@ class SkatingAerialAlignmentApp:
             max_iterations=20,
             optimization_sample_count=61,
         )
-        if not self.stabilization_checkbox.get_status()[0]:
+        if not self._stabilization_enabled():
             self.stabilization_checkbox.set_active(0)
         self.optimization_result = optimization_result
         self.parameters = replace(
@@ -426,6 +462,14 @@ class SkatingAerialAlignmentApp:
         )
         self.result = self.simulator.simulate(self.parameters)
         self._refresh_from_result(reset_animation=True)
+
+    def _on_playback_change(self, label: str) -> None:
+        """Update the playback speed from the speed selector."""
+
+        speed_map = {"100%": 1.0, "50%": 0.5, "25%": 0.25}
+        self.animation_speed_fraction = speed_map[label]
+        self._update_animation_playback()
+        self.figure.canvas.draw_idle()
 
     def _set_3d_bounds(self) -> None:
         """Set an equal 3D view box that contains the full animated trajectory."""
@@ -473,7 +517,7 @@ class SkatingAerialAlignmentApp:
     def _draw_frame(self, frame_index: int) -> None:
         """Update the 3D skeleton and time cursors for one frame."""
 
-        markers = self.result.markers[frame_index]
+        markers, body_axis = self._display_kinematics(frame_index)
         time = self.result.time[frame_index]
         for line, (start_name, end_name) in zip(self.skeleton_lines, skeleton_connections()):
             start = markers[self.simulator.marker_index[start_name]]
@@ -482,7 +526,7 @@ class SkatingAerialAlignmentApp:
             line.set_3d_properties([start[2], end[2]])
 
         pelvis = markers[self.simulator.marker_index["pelvis_origin"]]
-        body_tip = pelvis + 0.5 * self.result.body_axis[frame_index]
+        body_tip = pelvis + 0.5 * body_axis
         self.body_axis_line.set_data([pelvis[0], body_tip[0]], [pelvis[1], body_tip[1]])
         self.body_axis_line.set_3d_properties([pelvis[2], body_tip[2]])
 
@@ -503,9 +547,71 @@ class SkatingAerialAlignmentApp:
         """Advance the animation if it is currently playing."""
 
         if not self.is_paused:
-            self.frame_index = (self.frame_index + 1) % len(self.result.time)
+            self.frame_index = (self.frame_index + self.frames_per_animation_step) % len(
+                self.result.time
+            )
             self._draw_frame(self.frame_index)
         return []
+
+    def _display_kinematics(self, frame_index: int) -> tuple[np.ndarray, np.ndarray]:
+        """Return the marker cloud and longitudinal axis used for display."""
+
+        if not self._face_view_enabled():
+            return self.result.markers[frame_index], self.result.body_axis[frame_index]
+
+        display_q = np.asarray(self.result.q[frame_index], dtype=float).copy()
+        display_q[5] = 0.0
+        display_markers = self.simulator.markers(display_q)
+        display_body_axis = self.simulator.body_frame(display_q)[:, 2]
+        return display_markers, display_body_axis
+
+    def _stabilization_enabled(self) -> bool:
+        """Return whether trunk stabilization is enabled."""
+
+        return bool(self.stabilization_checkbox.get_status()[0])
+
+    def _face_view_enabled(self) -> bool:
+        """Return whether the front-view rendering mode is enabled."""
+
+        return bool(self.stabilization_checkbox.get_status()[1])
+
+    def _apply_view_mode(self) -> None:
+        """Apply the current 3D camera configuration."""
+
+        elev, azim = self.FACE_VIEW if self._face_view_enabled() else self.DEFAULT_VIEW
+        self.ax_3d.view_init(elev=elev, azim=azim)
+
+    def _update_animation_playback(self) -> None:
+        """Estimate playback duration and set the animation stepping accordingly."""
+
+        self.animation_speed_fraction = max(self.animation_speed_fraction, 1e-6)
+        target_duration = (
+            self.result.flight_time / self.animation_speed_fraction
+            if self.result.flight_time > 0.0
+            else 0.0
+        )
+        steps = max(
+            1,
+            int(np.ceil(target_duration * 1000.0 / self.ANIMATION_TIMER_INTERVAL_MS)),
+        )
+        self.frames_per_animation_step = max(
+            1,
+            int(np.ceil(max(len(self.result.time) - 1, 1) / steps)),
+        )
+        self.animation_duration_seconds = (
+            max(len(self.result.time) - 1, 1)
+            / self.frames_per_animation_step
+            * self.ANIMATION_TIMER_INTERVAL_MS
+            / 1000.0
+        )
+        self.playback_text_artist.set_text(
+            "Lecture: "
+            f"{int(round(self.animation_speed_fraction * 100.0))}% "
+            f"| temps reel ~ {self.result.flight_time:.2f} s "
+            f"| anim ~ {self.animation_duration_seconds:.2f} s"
+        )
+        if hasattr(self, "animation") and self.animation.event_source is not None:
+            self.animation.event_source.interval = self.ANIMATION_TIMER_INTERVAL_MS
 
     @staticmethod
     def _autoscale_axis(ax, time: np.ndarray, series: list[np.ndarray]) -> None:

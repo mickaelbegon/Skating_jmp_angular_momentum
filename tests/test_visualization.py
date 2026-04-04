@@ -40,6 +40,7 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
         FlightSimulationParameters(
             angular_velocity_rps=(0.0, 0.0, 3.0),
             takeoff_vertical_velocity=0.62,
+            backward_horizontal_velocity=0.4,
             stabilize_trunk=True,
         ),
         SimpleNamespace(
@@ -52,6 +53,7 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
 
     assert "Temps de vol" in text
     assert "0.62 m/s" in text
+    assert "0.40 m/s" in text
     assert "Angle initial" in text
     assert "H_global" in text
     assert "PD actif" in text

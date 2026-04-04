@@ -35,6 +35,7 @@ class FlightSimulationParameters:
 
     angular_velocity_rps: tuple[float, float, float] = (0.0, 0.0, 3.0)
     takeoff_vertical_velocity: float = DEFAULT_TAKEOFF_VERTICAL_VELOCITY
+    backward_horizontal_velocity: float = 0.0
     somersault_tilt_deg: float = 0.0
     inward_tilt_deg: float = 0.0
     initial_trunk_angles_deg: tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -136,6 +137,13 @@ class SkaterFlightSimulator:
         time = np.asarray(time, dtype=float)
         return takeoff_vertical_velocity - GRAVITY * time
 
+    @staticmethod
+    def backward_displacement(time: np.ndarray, backward_horizontal_velocity: float) -> np.ndarray:
+        """Return the global backward displacement along the anteroposterior axis."""
+
+        time = np.asarray(time, dtype=float)
+        return -backward_horizontal_velocity * time
+
     def angular_momentum_from_rps(
         self,
         angular_velocity_rps: tuple[float, float, float],
@@ -145,9 +153,7 @@ class SkaterFlightSimulator:
 
         angular_velocity = 2.0 * np.pi * np.asarray(angular_velocity_rps, dtype=float)
         configuration = (
-            np.asarray(q, dtype=float)
-            if q is not None
-            else np.zeros(self.model.nbQ(), dtype=float)
+            np.asarray(q, dtype=float) if q is not None else np.zeros(self.model.nbQ(), dtype=float)
         )
         return self.whole_body_inertia_tensor(configuration) @ angular_velocity
 
@@ -371,7 +377,9 @@ class SkaterFlightSimulator:
             time,
             parameters.takeoff_vertical_velocity,
         )
+        q[:, 1] = self.backward_displacement(time, parameters.backward_horizontal_velocity)
         qdot[:, 2] = self.ballistic_velocity(time, parameters.takeoff_vertical_velocity)
+        qdot[:, 1] = -parameters.backward_horizontal_velocity
 
         markers = np.zeros((time.size, self.model.nbMarkers(), 3), dtype=float)
         angular_momentum = np.zeros((time.size, 3), dtype=float)

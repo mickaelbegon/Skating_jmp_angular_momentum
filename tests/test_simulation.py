@@ -72,6 +72,22 @@ def test_angular_momentum_components_are_defined_in_the_global_frame() -> None:
     assert np.allclose(angular_momentum, reconstructed)
 
 
+def test_backward_horizontal_velocity_translates_the_skater_backward() -> None:
+    """A positive backward speed produces a negative global y translation."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            takeoff_vertical_velocity=0.50,
+            backward_horizontal_velocity=1.2,
+            sample_count=11,
+        )
+    )
+
+    assert np.allclose(result.qdot[:, 1], -1.2)
+    assert result.q[-1, 1] < 0.0
+
+
 def test_passive_zero_momentum_keeps_the_rotational_state_constant() -> None:
     """Without angular momentum or trunk actuation, the rotational state stays at rest."""
 
@@ -110,9 +126,7 @@ def test_inward_tilt_is_applied_with_the_new_negative_sign_convention() -> None:
     """A positive inward-tilt input maps to a negative generalized coordinate."""
 
     simulator = SkaterFlightSimulator()
-    q0 = simulator.initial_generalized_coordinates(
-        FlightSimulationParameters(inward_tilt_deg=12.0)
-    )
+    q0 = simulator.initial_generalized_coordinates(FlightSimulationParameters(inward_tilt_deg=12.0))
 
     assert q0[4] == pytest.approx(-np.deg2rad(12.0))
 
