@@ -259,17 +259,17 @@ class SkatingAerialAlignmentApp:
         slider_specs = [
             (
                 "salto_rps",
-                [0.10, 0.190, 0.20, 0.010],
+                [0.10, 0.190, 0.20, 0.0075],
                 "Hx eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.10, 0.146, 0.20, 0.010], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.10, 0.102, 0.20, 0.010], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.10, 0.146, 0.20, 0.0075], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.10, 0.102, 0.20, 0.0075], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
             (
                 "backward_travel",
-                [0.40, 0.190, 0.20, 0.010],
+                [0.40, 0.190, 0.20, 0.0075],
                 "Arriere (m)",
                 1.0,
                 5.0,
@@ -277,7 +277,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "flight_time",
-                [0.40, 0.146, 0.20, 0.010],
+                [0.40, 0.146, 0.20, 0.0075],
                 "Temps de vol (s)",
                 0.4,
                 0.8,
@@ -287,7 +287,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "somersault_tilt",
-                [0.40, 0.102, 0.20, 0.010],
+                [0.40, 0.102, 0.20, 0.0075],
                 "Incl. salto (deg)",
                 0.0,
                 30.0,
@@ -295,7 +295,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "inward_tilt",
-                [0.40, 0.058, 0.20, 0.010],
+                [0.40, 0.058, 0.20, 0.0075],
                 "Incl. int. (deg)",
                 0.0,
                 30.0,
@@ -354,7 +354,7 @@ class SkatingAerialAlignmentApp:
             child.set_visible(False)
         self.playback_menu_axis = playback_axis
 
-        time_axis = self.figure.add_axes([0.10, 0.262, 0.82, 0.010])
+        time_axis = self.figure.add_axes([0.10, 0.262, 0.82, 0.0075])
         self.time_slider = Slider(
             time_axis,
             label="Temps (s)",
