@@ -167,8 +167,8 @@ def test_initial_alignment_angle_is_exposed_explicitly() -> None:
     )
 
 
-def test_principal_moments_are_available_during_simulation() -> None:
-    """The simulation exposes the full-body principal moments and longitudinal inertia."""
+def test_twist_inertia_proxy_is_available_during_simulation() -> None:
+    """The simulation exposes the apparent twist inertia proxy `||H|| / |omega_vrille|`."""
 
     simulator = SkaterFlightSimulator()
     result = simulator.simulate(
@@ -179,17 +179,15 @@ def test_principal_moments_are_available_during_simulation() -> None:
         )
     )
 
-    assert result.principal_moments.shape == (21, 3)
-    assert result.inertia_tensor.shape == (21, 3, 3)
-    assert np.all(result.principal_moments > 0.0)
-    assert np.allclose(
-        result.principal_moments[0],
-        np.linalg.eigvalsh(result.inertia_tensor[0]),
+    finite_mask = np.isfinite(result.twist_inertia_proxy)
+    expected_ratio = np.linalg.norm(result.angular_momentum[finite_mask], axis=1) / np.abs(
+        result.twist_rotation_speed[finite_mask]
     )
-    assert np.isin(
-        result.longitudinal_principal_moment[0],
-        result.principal_moments[0],
-    ).item()
+
+    assert result.twist_inertia_proxy.shape == (21,)
+    assert np.any(finite_mask)
+    assert np.all(result.twist_inertia_proxy[finite_mask] > 0.0)
+    assert np.allclose(result.twist_inertia_proxy[finite_mask], expected_ratio)
 
 
 def test_simulation_stops_at_first_descending_ground_contact() -> None:

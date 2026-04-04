@@ -182,7 +182,7 @@ class SkatingAerialAlignmentApp:
         self.ax_rotation.set_title("Vrille et salto")
         self.ax_trunk.set_title("3 DoF du tronc")
         self.ax_torque.set_title("Efforts du tronc")
-        self.ax_inertia.set_title("Moments d'inertie du corps complet")
+        self.ax_inertia.set_title("Inertie apparente en vrille")
 
         self.ax_alignment.set_ylabel("deg")
         self.ax_rotation.set_ylabel("deg")
@@ -290,6 +290,14 @@ class SkatingAerialAlignmentApp:
         self.ground_surface = None
         (self.body_axis_line,) = self.ax_3d.plot([], [], [], color="#2CA02C", linewidth=2.5)
         (self.angular_momentum_line,) = self.ax_3d.plot([], [], [], color="#D62728", linewidth=2.5)
+        (self.precession_cone_line,) = self.ax_3d.plot(
+            [],
+            [],
+            [],
+            color="#9467BD",
+            linewidth=1.8,
+            linestyle="--",
+        )
 
         (self.alignment_line,) = self.ax_alignment.plot([], [], color="#D62728", linewidth=2.0)
         (self.salto_line,) = self.ax_rotation.plot(
@@ -312,16 +320,12 @@ class SkatingAerialAlignmentApp:
         ]
         self.ax_torque.legend(loc="upper left")
 
-        self.principal_moment_lines = [
-            self.ax_inertia.plot([], [], label=label, linewidth=1.6)[0]
-            for label in ("eig 1", "eig 2", "eig 3")
-        ]
-        (self.longitudinal_inertia_line,) = self.ax_inertia.plot(
+        (self.twist_inertia_line,) = self.ax_inertia.plot(
             [],
             [],
             color="#2CA02C",
             linewidth=2.6,
-            label="I longitudinal",
+            label="||H|| / |omega_vrille|",
         )
         self.ax_inertia.legend(loc="upper left")
 
@@ -382,11 +386,9 @@ class SkatingAerialAlignmentApp:
             line.set_data(time, values)
         for line, values in zip(self.torque_lines, trunk_torques.T):
             line.set_data(time, values)
-        for line, values in zip(self.principal_moment_lines, self.result.principal_moments.T):
-            line.set_data(time, values)
-        self.longitudinal_inertia_line.set_data(
+        self.twist_inertia_line.set_data(
             time,
-            self.result.longitudinal_principal_moment,
+            self.result.twist_inertia_proxy,
         )
 
         self._autoscale_axis(self.ax_alignment, time, [self.result.body_axis_alignment_deg])
@@ -400,8 +402,7 @@ class SkatingAerialAlignmentApp:
         self._autoscale_axis(
             self.ax_inertia,
             time,
-            [column for column in self.result.principal_moments.T]
-            + [self.result.longitudinal_principal_moment],
+            [self.result.twist_inertia_proxy[np.isfinite(self.result.twist_inertia_proxy)]],
         )
 
         self._set_3d_bounds()
@@ -529,6 +530,10 @@ class SkatingAerialAlignmentApp:
         body_tip = pelvis + 0.5 * body_axis
         self.body_axis_line.set_data([pelvis[0], body_tip[0]], [pelvis[1], body_tip[1]])
         self.body_axis_line.set_3d_properties([pelvis[2], body_tip[2]])
+        axis_history = self._display_body_axis_history(frame_index)
+        cone_tip_history = pelvis + 0.35 * axis_history
+        self.precession_cone_line.set_data(cone_tip_history[:, 0], cone_tip_history[:, 1])
+        self.precession_cone_line.set_3d_properties(cone_tip_history[:, 2])
 
         angular_momentum = self.result.angular_momentum[frame_index]
         if np.linalg.norm(angular_momentum) > 0.0:
@@ -564,6 +569,19 @@ class SkatingAerialAlignmentApp:
         display_markers = self.simulator.markers(display_q)
         display_body_axis = self.simulator.body_frame(display_q)[:, 2]
         return display_markers, display_body_axis
+
+    def _display_body_axis_history(self, frame_index: int) -> np.ndarray:
+        """Return the longitudinal-axis history used to display the precession cone."""
+
+        if not self._face_view_enabled():
+            return self.result.body_axis[: frame_index + 1]
+
+        history = []
+        for q_frame in self.result.q[: frame_index + 1]:
+            display_q = np.asarray(q_frame, dtype=float).copy()
+            display_q[5] = 0.0
+            history.append(self.simulator.body_frame(display_q)[:, 2])
+        return np.asarray(history, dtype=float)
 
     def _stabilization_enabled(self) -> bool:
         """Return whether trunk stabilization is enabled."""
@@ -618,7 +636,16 @@ class SkatingAerialAlignmentApp:
         """Autoscale one temporal axis around the provided traces."""
 
         ax.set_xlim(time[0], time[-1] if time[-1] > time[0] else time[0] + 1e-6)
-        stacked = np.concatenate([np.asarray(values, dtype=float).ravel() for values in series])
+        flattened = [
+            np.asarray(values, dtype=float).ravel()
+            for values in series
+            if np.asarray(values, dtype=float).size > 0
+        ]
+        if not flattened:
+            ax.set_ylim(-1.0, 1.0)
+            ax.grid(True, alpha=0.3)
+            return
+        stacked = np.concatenate(flattened)
         y_min = float(np.min(stacked))
         y_max = float(np.max(stacked))
         if np.isclose(y_min, y_max):

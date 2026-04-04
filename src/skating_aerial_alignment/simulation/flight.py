@@ -57,9 +57,8 @@ class FlightSimulationResult:
     body_axis: np.ndarray
     body_axis_alignment_deg: np.ndarray
     initial_body_axis_alignment_deg: float
-    inertia_tensor: np.ndarray
-    principal_moments: np.ndarray
-    longitudinal_principal_moment: np.ndarray
+    twist_rotation_speed: np.ndarray
+    twist_inertia_proxy: np.ndarray
     markers: np.ndarray
     flight_time: float
     equivalent_angular_momentum: np.ndarray
@@ -307,19 +306,6 @@ class SkaterFlightSimulator:
             )
         return inertia_tensor
 
-    def principal_moments_from_configuration(
-        self,
-        q: np.ndarray,
-    ) -> tuple[np.ndarray, float]:
-        """Return the principal moments and the one aligned with the body longitudinal axis."""
-
-        inertia_tensor = self.whole_body_inertia_tensor(q)
-        eigenvalues, eigenvectors = np.linalg.eigh(inertia_tensor)
-        longitudinal_axis = self.body_frame(q)[:, 2]
-        alignment = np.abs(eigenvectors.T @ longitudinal_axis)
-        longitudinal_index = int(np.argmax(alignment))
-        return np.asarray(eigenvalues, dtype=float), float(eigenvalues[longitudinal_index])
-
     def simulate(self, parameters: FlightSimulationParameters) -> FlightSimulationResult:
         """Integrate the aerial dynamics and return plotting-ready observables."""
 
@@ -385,9 +371,6 @@ class SkaterFlightSimulator:
         angular_momentum = np.zeros((time.size, 3), dtype=float)
         body_axis = np.zeros((time.size, 3), dtype=float)
         alignment = np.zeros(time.size, dtype=float)
-        inertia_tensor = np.zeros((time.size, 3, 3), dtype=float)
-        principal_moments = np.zeros((time.size, 3), dtype=float)
-        longitudinal_principal_moment = np.zeros(time.size, dtype=float)
 
         for frame_index, (q_frame, qdot_frame) in enumerate(zip(q, qdot)):
             markers[frame_index] = self.markers(q_frame)
@@ -397,11 +380,13 @@ class SkaterFlightSimulator:
                 angular_momentum[frame_index],
                 body_axis[frame_index],
             )
-            inertia_tensor[frame_index] = self.whole_body_inertia_tensor(q_frame)
-            (
-                principal_moments[frame_index],
-                longitudinal_principal_moment[frame_index],
-            ) = self.principal_moments_from_configuration(q_frame)
+        twist_rotation_speed = np.asarray(qdot[:, 5], dtype=float)
+        twist_inertia_proxy = np.divide(
+            np.linalg.norm(angular_momentum, axis=1),
+            np.abs(twist_rotation_speed),
+            out=np.full(time.shape, np.nan, dtype=float),
+            where=np.abs(twist_rotation_speed) > 1e-8,
+        )
 
         return FlightSimulationResult(
             time=time,
@@ -412,9 +397,8 @@ class SkaterFlightSimulator:
             body_axis=body_axis,
             body_axis_alignment_deg=alignment,
             initial_body_axis_alignment_deg=float(alignment[0]),
-            inertia_tensor=inertia_tensor,
-            principal_moments=principal_moments,
-            longitudinal_principal_moment=longitudinal_principal_moment,
+            twist_rotation_speed=twist_rotation_speed,
+            twist_inertia_proxy=twist_inertia_proxy,
             markers=markers,
             flight_time=flight_time,
             equivalent_angular_momentum=desired_angular_momentum_world,
