@@ -194,6 +194,7 @@ class SkatingAerialAlignmentApp:
         self.ax_3d = self.figure.add_subplot(grid[:, 0], projection="3d")
         self.ax_alignment = self.figure.add_subplot(grid[0, 1])
         self.ax_rotation = self.figure.add_subplot(grid[1, 1])
+        self.ax_rotation_salto = self.ax_rotation.twinx()
         self.ax_trunk = self.figure.add_subplot(grid[2, 1], sharex=self.ax_alignment)
         self.ax_torque = self.figure.add_subplot(grid[3, 1], sharex=self.ax_alignment)
         self.ax_inertia = self.figure.add_subplot(grid[4, 1], sharex=self.ax_alignment)
@@ -206,7 +207,8 @@ class SkatingAerialAlignmentApp:
         self.ax_inertia.set_title("Inertie apparente en vrille")
 
         self.ax_alignment.set_ylabel("deg")
-        self.ax_rotation.set_ylabel("deg")
+        self.ax_rotation.set_ylabel("Vrille (deg)")
+        self.ax_rotation_salto.set_ylabel("Salto (deg)")
         self.ax_trunk.set_ylabel("deg")
         self.ax_torque.set_ylabel("N.m")
         self.ax_inertia.set_ylabel("kg.m^2")
@@ -404,13 +406,18 @@ class SkatingAerialAlignmentApp:
         )
 
         (self.alignment_line,) = self.ax_alignment.plot([], [], color="#D62728", linewidth=2.0)
-        (self.salto_line,) = self.ax_rotation.plot(
-            [], [], label="Salto", color="#1F77B4", linewidth=2.0
-        )
         (self.twist_line,) = self.ax_rotation.plot(
             [], [], label="Vrille", color="#FF7F0E", linewidth=2.0
         )
-        self.ax_rotation.legend(loc="upper left")
+        (self.salto_line,) = self.ax_rotation_salto.plot(
+            [], [], label="Salto", color="#1F77B4", linewidth=2.0
+        )
+        rotation_handles = [self.twist_line, self.salto_line]
+        self.ax_rotation.legend(
+            rotation_handles,
+            [line.get_label() for line in rotation_handles],
+            loc="upper left",
+        )
 
         self.trunk_lines = [
             self.ax_trunk.plot([], [], label=label, linewidth=2.0)[0]
@@ -438,6 +445,7 @@ class SkatingAerialAlignmentApp:
             for axis in (
                 self.ax_alignment,
                 self.ax_rotation,
+                self.ax_rotation_salto,
                 self.ax_trunk,
                 self.ax_torque,
                 self.ax_inertia,
@@ -579,8 +587,8 @@ class SkatingAerialAlignmentApp:
         )
         self.com_trajectory_line.set_3d_properties(self.result.center_of_mass[:, 2])
         self.alignment_line.set_data(time, self.result.body_axis_alignment_deg)
-        self.salto_line.set_data(time, np.rad2deg(self.result.q[:, 3]))
         self.twist_line.set_data(time, np.rad2deg(self.result.q[:, 5]))
+        self.salto_line.set_data(time, np.rad2deg(self.result.q[:, 3]))
 
         trunk_angles_deg = np.rad2deg(self.result.q[:, 6:9])
         trunk_torques = self.result.tau[:, 6:9]
@@ -597,8 +605,9 @@ class SkatingAerialAlignmentApp:
         self._autoscale_axis(
             self.ax_rotation,
             time,
-            [np.rad2deg(self.result.q[:, 3]), np.rad2deg(self.result.q[:, 5])],
+            [np.rad2deg(self.result.q[:, 5])],
         )
+        self._autoscale_axis(self.ax_rotation_salto, time, [np.rad2deg(self.result.q[:, 3])])
         self._autoscale_axis(self.ax_trunk, time, [column for column in trunk_angles_deg.T])
         self._autoscale_axis(self.ax_torque, time, [column for column in trunk_torques.T])
         self._autoscale_axis(
