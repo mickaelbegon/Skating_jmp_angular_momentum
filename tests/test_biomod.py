@@ -87,11 +87,38 @@ def test_neutral_pose_uses_a_compact_backspin_geometry(tmp_path: Path) -> None:
     toe_left = markers[marker_index["toe_left"]]
     toe_right = markers[marker_index["toe_right"]]
     expected_foot_length = SkaterFlightBiomod()._foot_length()
+    shoulder_left = markers[marker_index["shoulder_left"]]
+    shoulder_right = markers[marker_index["shoulder_right"]]
+    elbow_left = markers[marker_index["elbow_left"]]
+    elbow_right = markers[marker_index["elbow_right"]]
+
+    left_upper_arm = elbow_left - shoulder_left
+    right_upper_arm = elbow_right - shoulder_right
+    left_upper_arm_norm = np.linalg.norm(left_upper_arm)
+    right_upper_arm_norm = np.linalg.norm(right_upper_arm)
+    left_basic_flexion_deg = np.rad2deg(
+        np.arcsin(np.clip(left_upper_arm[1] / left_upper_arm_norm, -1.0, 1.0))
+    )
+    right_basic_flexion_deg = np.rad2deg(
+        np.arcsin(np.clip(right_upper_arm[1] / right_upper_arm_norm, -1.0, 1.0))
+    )
+    left_flexion_deg = (
+        180.0 - left_basic_flexion_deg if left_upper_arm[2] > 0.0 else left_basic_flexion_deg
+    )
+    right_flexion_deg = (
+        180.0 - right_basic_flexion_deg if right_upper_arm[2] > 0.0 else right_basic_flexion_deg
+    )
+    left_adduction_deg = np.rad2deg(np.arctan2(abs(left_upper_arm[0]), abs(left_upper_arm[2])))
+    right_adduction_deg = np.rad2deg(np.arctan2(abs(right_upper_arm[0]), abs(right_upper_arm[2])))
 
     assert abs(wrist_left[0]) < 0.03
     assert abs(wrist_right[0]) < 0.03
     assert np.linalg.norm(wrist_left - sternum) < 0.12
     assert np.linalg.norm(wrist_right - sternum) < 0.12
+    assert left_flexion_deg == pytest.approx(110.0, abs=1e-3)
+    assert right_flexion_deg == pytest.approx(110.0, abs=1e-3)
+    assert left_adduction_deg == pytest.approx(20.0, abs=1e-3)
+    assert right_adduction_deg == pytest.approx(20.0, abs=1e-3)
     assert ankle_left[0] < 0.0
     assert ankle_right[0] > 0.0
     assert toe_left[1] - ankle_left[1] == pytest.approx(expected_foot_length, abs=1e-5)

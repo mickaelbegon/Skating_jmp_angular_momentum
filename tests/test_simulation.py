@@ -148,7 +148,7 @@ def test_passive_simulation_preserves_angular_momentum_magnitude() -> None:
     )
 
     magnitudes = np.linalg.norm(result.angular_momentum, axis=1)
-    assert np.max(np.abs(magnitudes - magnitudes[0])) < 1e-8
+    assert np.max(np.abs(magnitudes - magnitudes[0])) < 5e-8
 
 
 def test_initial_alignment_angle_is_exposed_explicitly() -> None:

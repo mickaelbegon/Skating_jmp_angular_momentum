@@ -17,6 +17,8 @@ from skating_aerial_alignment.anthropometry import (
 TRUNK_PELVIS_FRACTION = 0.35
 TRUNK_THORAX_FRACTION = 0.65
 BACKSPIN_FOOT_LENGTH_SCALE = 0.65
+BACKSPIN_ARM_ADDUCTION_DEG = 20.0
+BACKSPIN_ARM_FLEXION_DEG = 110.0
 
 
 @dataclass(frozen=True)
@@ -125,6 +127,12 @@ class SkaterFlightBiomod:
 
         return BACKSPIN_FOOT_LENGTH_SCALE * self.dimensions.foot_length
 
+    def _sternum_position_on_thorax(self) -> tuple[float, float, float]:
+        """Return the marker position used to represent the upper sternum."""
+
+        dims = self.dimensions
+        return (0.0, 0.30 * dims.thorax_height, 0.78 * dims.thorax_height)
+
     def _arm_backspin_offsets(
         self,
         side: str,
@@ -133,22 +141,36 @@ class SkaterFlightBiomod:
 
         dims = self.dimensions
         sign = 1.0 if side == "left" else -1.0
-        elbow_offset = (
-            -sign * 0.55 * dims.shoulder_half_width,
-            0.18 * dims.thorax_height,
-            -0.42 * dims.upper_arm_length,
+        flexion = np.deg2rad(BACKSPIN_ARM_FLEXION_DEG)
+        adduction = np.deg2rad(BACKSPIN_ARM_ADDUCTION_DEG)
+
+        flexed_upper_arm = np.array(
+            [
+                0.0,
+                np.sin(flexion) * dims.upper_arm_length,
+                -np.cos(flexion) * dims.upper_arm_length,
+            ],
+            dtype=float,
         )
-        wrist_offset = (
-            -sign * 0.40 * dims.shoulder_half_width,
-            -0.02 * dims.thorax_height,
-            -0.18 * dims.forearm_length,
+        adduction_angle = -sign * adduction
+        elbow_offset = np.array(
+            [
+                flexed_upper_arm[2] * np.sin(adduction_angle),
+                flexed_upper_arm[1],
+                flexed_upper_arm[2] * np.cos(adduction_angle),
+            ],
+            dtype=float,
         )
-        hand_tip_offset = (
-            0.0,
-            0.04 * dims.thorax_height,
-            -0.18 * dims.hand_length,
+
+        sternum_target = np.asarray(self._sternum_position_on_thorax(), dtype=float)
+        shoulder_origin = np.array([sign * dims.shoulder_half_width, 0.0, dims.thorax_height])
+        wrist_target = sternum_target - shoulder_origin
+        wrist_offset = wrist_target - elbow_offset
+        hand_tip_offset = np.array(
+            (0.0, 0.02 * dims.thorax_height, -0.12 * dims.hand_length),
+            dtype=float,
         )
-        return elbow_offset, wrist_offset, hand_tip_offset
+        return tuple(elbow_offset), tuple(wrist_offset), tuple(hand_tip_offset)
 
     def _leg_backspin_offsets(
         self,
@@ -429,11 +451,7 @@ class SkaterFlightBiomod:
                     (0.0, 0.0, dims.pelvis_height),
                 ),
                 _marker_block("thorax_top", "thorax", (0.0, 0.0, dims.thorax_height)),
-                _marker_block(
-                    "sternum",
-                    "thorax",
-                    (0.0, 0.07 * dims.thorax_height, 0.55 * dims.thorax_height),
-                ),
+                _marker_block("sternum", "thorax", self._sternum_position_on_thorax()),
                 _marker_block("head_top", "head", (0.0, 0.0, dims.head_height)),
             ]
         )
