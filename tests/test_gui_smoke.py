@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -20,8 +21,9 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.result.time.size > 0
         assert app.sliders["salto_rps"].valmin == 0.0
         assert app.sliders["salto_rps"].valmax == 0.25
-        assert app.sliders["backward_travel"].valmin == 1.0
-        assert app.sliders["backward_travel"].valmax == 5.0
+        assert app.sliders["backward_velocity"].valmin == 1.0
+        assert app.sliders["backward_velocity"].valmax == 5.0
+        assert app.sliders["backward_velocity"].label.get_text() == "V_arr (m/s)"
         assert app.sliders["flight_time"].valmin == 0.4
         assert app.sliders["flight_time"].valmax == 0.8
         assert app.twist_inertia_line is not None
@@ -49,6 +51,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.time_slider.ax.get_position().height < 0.009
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
+        assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
+        assert mpl.rcParams["axes3d.mouserotationstyle"] == "azel"
         assert app.ax_inertia.get_xlabel() == "Temps (s)"
         assert all(label.get_visible() is False for label in app.ax_alignment.get_xticklabels())
         assert all(label.get_visible() is False for label in app.ax_rotation.get_xticklabels())

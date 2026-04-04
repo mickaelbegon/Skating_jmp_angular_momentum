@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import FuncAnimation
@@ -59,8 +60,8 @@ def format_status_text(
     return (
         f"Temps de vol ~ {result.flight_time:.3f} s | "
         f"Vz = {parameters.takeoff_vertical_velocity:.2f} m/s | "
-        f"Arriere = {backward_distance:.2f} m "
-        f"({abs(parameters.backward_horizontal_velocity):.2f} m/s) | "
+        f"V_arr = {abs(parameters.backward_horizontal_velocity):.2f} m/s | "
+        f"Arriere = {backward_distance:.2f} m | "
         f"Angle initial = {result.initial_body_axis_alignment_deg:.1f} deg | "
         f"H_global = [{result.equivalent_angular_momentum[0]:.2f}, "
         f"{result.equivalent_angular_momentum[1]:.2f}, "
@@ -111,11 +112,12 @@ class SkatingAerialAlignmentApp:
     ANIMATION_TIMER_INTERVAL_MS = 16
     DEFAULT_VIEW = (18.0, -70.0)
     FACE_VIEW = (8.0, 90.0)
-    DEFAULT_BACKWARD_TRAVEL_M = 1.0
+    DEFAULT_BACKWARD_VELOCITY_M_S = 2.0
 
     def __init__(self) -> None:
         """Create the figure, controls, and initial simulation."""
 
+        mpl.rcParams["axes3d.mouserotationstyle"] = "azel"
         self.simulator = SkaterFlightSimulator()
         self.parameters = FlightSimulationParameters()
         self.result = self.simulator.simulate(self.parameters)
@@ -224,7 +226,7 @@ class SkatingAerialAlignmentApp:
         self.ax_3d.set_xlabel("x")
         self.ax_3d.set_ylabel("y")
         self.ax_3d.set_zlabel("z")
-        self.ax_3d.view_init(elev=18, azim=-70)
+        self.ax_3d.view_init(elev=18, azim=-70, roll=0.0, vertical_axis="z")
 
     def _build_controls(self) -> None:
         """Create sliders, buttons, and checkboxes."""
@@ -270,12 +272,12 @@ class SkatingAerialAlignmentApp:
             ("tilt_rps", [0.10, 0.146, 0.20, 0.0075], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
             ("twist_rps", [0.10, 0.102, 0.20, 0.0075], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
             (
-                "backward_travel",
+                "backward_velocity",
                 [0.40, 0.190, 0.20, 0.0075],
-                "Arriere (m)",
+                "V_arr (m/s)",
                 1.0,
                 5.0,
-                self.DEFAULT_BACKWARD_TRAVEL_M,
+                self.DEFAULT_BACKWARD_VELOCITY_M_S,
             ),
             (
                 "flight_time",
@@ -462,9 +464,7 @@ class SkatingAerialAlignmentApp:
                 self.sliders["tilt_rps"].val,
                 self.sliders["twist_rps"].val,
             ),
-            backward_horizontal_velocity=(
-                self.sliders["backward_travel"].val / max(self.sliders["flight_time"].val, 1e-6)
-            ),
+            backward_horizontal_velocity=self.sliders["backward_velocity"].val,
             takeoff_vertical_velocity=self.simulator.takeoff_velocity_from_flight_time(
                 self.sliders["flight_time"].val
             ),
@@ -647,7 +647,7 @@ class SkatingAerialAlignmentApp:
         self.sliders["salto_rps"].set_val(defaults.angular_velocity_rps[0])
         self.sliders["tilt_rps"].set_val(defaults.angular_velocity_rps[1])
         self.sliders["twist_rps"].set_val(defaults.angular_velocity_rps[2])
-        self.sliders["backward_travel"].set_val(self.DEFAULT_BACKWARD_TRAVEL_M)
+        self.sliders["backward_velocity"].set_val(self.DEFAULT_BACKWARD_VELOCITY_M_S)
         self.sliders["flight_time"].set_val(
             self.simulator.flight_time_from_takeoff_velocity(defaults.takeoff_vertical_velocity)
         )
@@ -860,7 +860,7 @@ class SkatingAerialAlignmentApp:
         """Apply the current 3D camera configuration."""
 
         elev, azim = self.FACE_VIEW if self._face_view_enabled() else self.DEFAULT_VIEW
-        self.ax_3d.view_init(elev=elev, azim=azim)
+        self.ax_3d.view_init(elev=elev, azim=azim, roll=0.0, vertical_axis="z")
 
     def _update_animation_playback(self) -> None:
         """Estimate playback duration and set the animation stepping accordingly."""
