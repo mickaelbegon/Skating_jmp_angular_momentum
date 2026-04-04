@@ -188,7 +188,7 @@ class SkaterFlightSimulator:
 
         q0 = np.zeros(self.model.nbQ(), dtype=float)
         q0[3] = np.deg2rad(parameters.somersault_tilt_deg)
-        q0[4] = np.deg2rad(parameters.inward_tilt_deg)
+        q0[4] = -np.deg2rad(parameters.inward_tilt_deg)
         q0[6:9] = np.deg2rad(np.asarray(parameters.initial_trunk_angles_deg, dtype=float))
         q0[2] = self.initial_root_height(q0)
         return q0

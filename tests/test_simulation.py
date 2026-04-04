@@ -75,6 +75,17 @@ def test_takeoff_pose_starts_with_lowest_marker_on_the_ground() -> None:
     assert np.min(result.markers[0, :, 2]) == pytest.approx(0.0)
 
 
+def test_inward_tilt_is_applied_with_the_new_negative_sign_convention() -> None:
+    """A positive inward-tilt input maps to a negative generalized coordinate."""
+
+    simulator = SkaterFlightSimulator()
+    q0 = simulator.initial_generalized_coordinates(
+        FlightSimulationParameters(inward_tilt_deg=12.0)
+    )
+
+    assert q0[4] == pytest.approx(-np.deg2rad(12.0))
+
+
 def test_passive_simulation_preserves_angular_momentum_magnitude() -> None:
     """The zero-torque rotational dynamics conserves angular momentum during flight."""
 
