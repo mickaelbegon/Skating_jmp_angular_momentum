@@ -252,17 +252,17 @@ class SkatingAerialAlignmentApp:
         slider_specs = [
             (
                 "salto_rps",
-                [0.10, 0.205, 0.20, 0.022],
+                [0.10, 0.207, 0.20, 0.014],
                 "Hx eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.10, 0.157, 0.20, 0.022], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.10, 0.109, 0.20, 0.022], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.10, 0.159, 0.20, 0.014], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.10, 0.111, 0.20, 0.014], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
             (
                 "backward_travel",
-                [0.40, 0.205, 0.20, 0.022],
+                [0.40, 0.207, 0.20, 0.014],
                 "Arriere (m)",
                 1.0,
                 5.0,
@@ -270,7 +270,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "flight_time",
-                [0.40, 0.157, 0.20, 0.022],
+                [0.40, 0.159, 0.20, 0.014],
                 "Temps de vol (s)",
                 0.4,
                 0.8,
@@ -280,7 +280,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "somersault_tilt",
-                [0.40, 0.109, 0.20, 0.022],
+                [0.40, 0.111, 0.20, 0.014],
                 "Incl. salto (deg)",
                 0.0,
                 30.0,
@@ -288,7 +288,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "inward_tilt",
-                [0.40, 0.061, 0.20, 0.022],
+                [0.40, 0.063, 0.20, 0.014],
                 "Incl. int. (deg)",
                 0.0,
                 30.0,
@@ -300,6 +300,8 @@ class SkatingAerialAlignmentApp:
         for name, rect, label, vmin, vmax, initial in slider_specs:
             axis = self.figure.add_axes(rect)
             slider = Slider(axis, label=label, valmin=vmin, valmax=vmax, valinit=initial)
+            slider.label.set_fontsize(8.5)
+            slider.valtext.set_fontsize(8.5)
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
 
@@ -345,7 +347,7 @@ class SkatingAerialAlignmentApp:
             child.set_visible(False)
         self.playback_menu_axis = playback_axis
 
-        time_axis = self.figure.add_axes([0.10, 0.286, 0.82, 0.022])
+        time_axis = self.figure.add_axes([0.10, 0.289, 0.82, 0.014])
         self.time_slider = Slider(
             time_axis,
             label="Temps (s)",
@@ -353,6 +355,8 @@ class SkatingAerialAlignmentApp:
             valmax=max(self.result.flight_time, 1e-6),
             valinit=0.0,
         )
+        self.time_slider.label.set_fontsize(8.5)
+        self.time_slider.valtext.set_fontsize(8.5)
         self.time_slider.on_changed(self._on_time_slider_change)
 
     def _build_plot_artists(self) -> None:

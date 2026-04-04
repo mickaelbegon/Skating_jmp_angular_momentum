@@ -45,6 +45,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app._inward_tilt_optimization_enabled() is False
         assert app.time_slider.valmin == 0.0
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
+        assert app.sliders["salto_rps"].ax.get_position().height < 0.02
+        assert app.time_slider.ax.get_position().height < 0.02
         assert app.frames_per_animation_step >= 1
     finally:
         app.animation._draw_was_started = True
