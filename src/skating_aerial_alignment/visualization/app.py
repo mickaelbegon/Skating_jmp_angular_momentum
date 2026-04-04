@@ -228,25 +228,25 @@ class SkatingAerialAlignmentApp:
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
 
-        checkbox_axis = self.figure.add_axes([0.78, 0.12, 0.16, 0.09])
+        optimize_axis = self.figure.add_axes([0.08, 0.07, 0.10, 0.04])
+        self.optimize_button = Button(optimize_axis, "Auto PD")
+        self.optimize_button.on_clicked(self._optimize_controller)
+
+        pause_axis = self.figure.add_axes([0.20, 0.07, 0.10, 0.04])
+        self.pause_button = Button(pause_axis, "Pause")
+        self.pause_button.on_clicked(self._toggle_pause)
+
+        reset_axis = self.figure.add_axes([0.32, 0.07, 0.10, 0.04])
+        self.reset_button = Button(reset_axis, "Reset")
+        self.reset_button.on_clicked(self._reset_controls)
+
+        checkbox_axis = self.figure.add_axes([0.46, 0.055, 0.20, 0.075])
         self.stabilization_checkbox = CheckButtons(
             checkbox_axis,
             labels=["Stabiliser le tronc"],
             actives=[False],
         )
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
-
-        pause_axis = self.figure.add_axes([0.78, 0.22, 0.08, 0.035])
-        self.pause_button = Button(pause_axis, "Pause")
-        self.pause_button.on_clicked(self._toggle_pause)
-
-        optimize_axis = self.figure.add_axes([0.68, 0.22, 0.08, 0.035])
-        self.optimize_button = Button(optimize_axis, "Auto PD")
-        self.optimize_button.on_clicked(self._optimize_controller)
-
-        reset_axis = self.figure.add_axes([0.88, 0.22, 0.08, 0.035])
-        self.reset_button = Button(reset_axis, "Reset")
-        self.reset_button.on_clicked(self._reset_controls)
 
     def _build_plot_artists(self) -> None:
         """Initialize the lines that will be updated after each simulation."""
