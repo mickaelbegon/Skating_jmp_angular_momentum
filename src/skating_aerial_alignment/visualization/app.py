@@ -190,8 +190,8 @@ class SkatingAerialAlignmentApp:
                 [0.42, 0.20, 0.22, 0.022],
                 "Vitesse verticale (m/s)",
                 0.1,
-                1.0,
-                0.60,
+                3.0,
+                self.parameters.takeoff_vertical_velocity,
             ),
             (
                 "somersault_tilt",

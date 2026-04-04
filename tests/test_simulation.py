@@ -23,6 +23,17 @@ def test_flight_time_and_takeoff_velocity_are_inverse_relations() -> None:
     assert reconstructed_velocity == pytest.approx(0.62)
 
 
+def test_default_takeoff_velocity_matches_a_half_second_flight_time() -> None:
+    """The default vertical velocity corresponds to a 0.5 s ballistic flight."""
+
+    parameters = FlightSimulationParameters()
+    flight_time = SkaterFlightSimulator.flight_time_from_takeoff_velocity(
+        parameters.takeoff_vertical_velocity
+    )
+
+    assert flight_time == pytest.approx(0.5)
+
+
 def test_controller_torques_oppose_trunk_deviation() -> None:
     """The PD controller generates restoring trunk torques."""
 

@@ -16,6 +16,8 @@ ROOT_DOF = 6
 TRUNK_DOF = 3
 ROTATION_STATE_DOF = ROOT_DOF - 3 + TRUNK_DOF
 GRAVITY = 9.81
+DEFAULT_FLIGHT_TIME = 0.5
+DEFAULT_TAKEOFF_VERTICAL_VELOCITY = 0.5 * GRAVITY * DEFAULT_FLIGHT_TIME
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,7 @@ class FlightSimulationParameters:
     """User-facing simulation inputs matching the GUI sliders."""
 
     angular_velocity_rps: tuple[float, float, float] = (0.0, 0.0, 3.0)
-    takeoff_vertical_velocity: float = 0.60
+    takeoff_vertical_velocity: float = DEFAULT_TAKEOFF_VERTICAL_VELOCITY
     somersault_tilt_deg: float = 0.0
     inward_tilt_deg: float = 0.0
     initial_trunk_angles_deg: tuple[float, float, float] = (0.0, 0.0, 0.0)
