@@ -40,6 +40,27 @@ class SafeCheckButtons(CheckButtons):
             )
 
 
+class SafeRadioButtons(RadioButtons):
+    """RadioButtons variant that ignores incomplete hit-test payloads from Matplotlib."""
+
+    def _clicked(self, event):
+        """Ignore malformed `contains` payloads instead of raising `KeyError`."""
+
+        if self.ignore(event) or event.button != 1 or not self.ax.contains(event)[0]:
+            return
+        button_details = self._buttons.contains(event)[1]
+        button_indices = list(button_details.get("ind", []))
+        label_indices = [i for i, text in enumerate(self.labels) if text.contains(event)[0]]
+        candidate_indices = [*button_indices, *label_indices]
+        if candidate_indices:
+            coords = self._buttons.get_offset_transform().transform(self._buttons.get_offsets())
+            self.set_active(
+                candidate_indices[
+                    (((event.x, event.y) - coords[candidate_indices]) ** 2).sum(-1).argmin()
+                ]
+            )
+
+
 def skeleton_connections() -> list[tuple[str, str]]:
     """Return the marker pairs used to draw the reduced whole-body skeleton."""
 
@@ -365,7 +386,7 @@ class SkatingAerialAlignmentApp:
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
         playback_axis = self.figure.add_axes([0.69, 0.095, 0.12, 0.055])
-        self.playback_selector = RadioButtons(
+        self.playback_selector = SafeRadioButtons(
             playback_axis,
             labels=("100%", "50%", "25%"),
             active=0,

@@ -175,3 +175,23 @@ def test_checkbox_click_tolerates_missing_frame_index_payload() -> None:
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
+
+
+def test_radio_button_click_tolerates_missing_button_index_payload() -> None:
+    """Malformed Matplotlib hit-test payloads on radio buttons are ignored safely."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        selector = app.playback_selector
+        initial_label = selector.value_selected
+        selector.ax.contains = lambda event: (True, {})
+        selector._buttons.contains = lambda event: (True, {})
+        selector.labels = []
+
+        event = SimpleNamespace(button=1, x=0.0, y=0.0)
+        selector._clicked(event)
+
+        assert selector.value_selected == initial_label
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
