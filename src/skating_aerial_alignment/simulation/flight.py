@@ -89,6 +89,18 @@ class InwardTiltOptimizationResult:
     message: str
 
 
+@dataclass(frozen=True)
+class AlignmentOptimizationResult:
+    """Result of the inward-tilt search that improves body-axis alignment with `H`."""
+
+    inward_tilt_deg: float
+    mean_alignment_deg: float
+    initial_alignment_deg: float
+    evaluations: int
+    success: bool
+    message: str
+
+
 class SkaterFlightSimulator:
     """Simulate the zero-gravity aerial phase of the reduced skater model."""
 
@@ -582,6 +594,15 @@ class SkaterFlightSimulator:
         twist_angle = float(result.twist_angle[-1] - result.twist_angle[0])
         return abs(twist_angle) / (2.0 * np.pi)
 
+    @staticmethod
+    def mean_body_axis_alignment_deg(result: FlightSimulationResult) -> float:
+        """Return the mean angle between `H` and the body longitudinal axis over the flight."""
+
+        if result.time.size <= 1 or np.isclose(result.flight_time, 0.0):
+            return float(result.body_axis_alignment_deg[0])
+        integral = float(np.trapz(result.body_axis_alignment_deg, result.time))
+        return integral / float(result.time[-1] - result.time[0])
+
     def tune_trunk_controller(
         self,
         parameters: FlightSimulationParameters,
@@ -642,7 +663,7 @@ class SkaterFlightSimulator:
         self,
         parameters: FlightSimulationParameters,
         *,
-        bounds: tuple[float, float] = (0.0, 30.0),
+        bounds: tuple[float, float] = (-30.0, 30.0),
         max_iterations: int = 20,
         optimization_sample_count: int = 61,
     ) -> InwardTiltOptimizationResult:
@@ -670,6 +691,44 @@ class SkaterFlightSimulator:
         return InwardTiltOptimizationResult(
             inward_tilt_deg=optimal_tilt,
             twist_turns=self.twist_accumulation_turns(optimal_result),
+            evaluations=int(getattr(optimization, "nfev", 0)),
+            success=bool(optimization.success),
+            message=str(getattr(optimization, "message", "")),
+        )
+
+    def optimize_inward_tilt_for_alignment(
+        self,
+        parameters: FlightSimulationParameters,
+        *,
+        bounds: tuple[float, float] = (-30.0, 30.0),
+        max_iterations: int = 20,
+        optimization_sample_count: int = 61,
+    ) -> AlignmentOptimizationResult:
+        """Find the inward tilt that minimizes mean misalignment between body axis and `H`."""
+
+        base_parameters = replace(
+            parameters,
+            inward_tilt_deg=float(np.clip(parameters.inward_tilt_deg, *bounds)),
+            sample_count=max(11, int(optimization_sample_count)),
+        )
+
+        def objective(inward_tilt_deg: float) -> float:
+            candidate_parameters = replace(base_parameters, inward_tilt_deg=float(inward_tilt_deg))
+            result = self.simulate(candidate_parameters)
+            return self.mean_body_axis_alignment_deg(result)
+
+        optimization = minimize_scalar(
+            objective,
+            bounds=bounds,
+            method="bounded",
+            options={"maxiter": max_iterations, "xatol": 1e-2},
+        )
+        optimal_tilt = float(optimization.x)
+        optimal_result = self.simulate(replace(base_parameters, inward_tilt_deg=optimal_tilt))
+        return AlignmentOptimizationResult(
+            inward_tilt_deg=optimal_tilt,
+            mean_alignment_deg=self.mean_body_axis_alignment_deg(optimal_result),
+            initial_alignment_deg=float(optimal_result.initial_body_axis_alignment_deg),
             evaluations=int(getattr(optimization, "nfev", 0)),
             success=bool(optimization.success),
             message=str(getattr(optimization, "message", "")),

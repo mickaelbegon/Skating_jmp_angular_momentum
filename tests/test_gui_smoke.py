@@ -46,8 +46,9 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.speed_button.label.get_text() == "Vitesse 100%"
         assert len(app.control_section_titles) == 4
         assert app.control_section_titles[0].get_text() == "Moment cinetique global"
-        assert len(app.stabilization_checkbox.get_status()) == 3
+        assert len(app.stabilization_checkbox.get_status()) == 4
         assert app._inward_tilt_optimization_enabled() is False
+        assert app._alignment_optimization_enabled() is False
         assert app.time_slider.valmin == 0.0
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
         assert app.sliders["salto_rps"].ax.get_position().height < 0.009
@@ -219,6 +220,43 @@ def test_enabling_inward_tilt_optimization_updates_the_slider_and_result() -> No
             app.inward_tilt_optimization_result.inward_tilt_deg
         )
         assert app.sliders["inward_tilt"].val == pytest.approx(app.parameters.inward_tilt_deg)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_enabling_alignment_optimization_updates_the_slider_and_result() -> None:
+    """Turning on alignment optimization applies the optimized tilt to the scenario."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(3)
+
+        assert app._alignment_optimization_enabled() is True
+        assert app.alignment_optimization_result is not None
+        assert app.inward_tilt_optimization_result is None
+        assert app.parameters.inward_tilt_deg == pytest.approx(
+            app.alignment_optimization_result.inward_tilt_deg
+        )
+        assert app.sliders["inward_tilt"].val == pytest.approx(app.parameters.inward_tilt_deg)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_alignment_and_twist_optimization_modes_are_mutually_exclusive() -> None:
+    """Selecting one inward-tilt optimization mode disables the other one."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(2)
+        assert app._inward_tilt_optimization_enabled() is True
+        assert app._alignment_optimization_enabled() is False
+
+        app.stabilization_checkbox.set_active(3)
+
+        assert app._alignment_optimization_enabled() is True
+        assert app._inward_tilt_optimization_enabled() is False
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

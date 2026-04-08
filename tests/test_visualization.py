@@ -80,6 +80,7 @@ def test_inertia_text_mentions_inertias_and_controller_gains() -> None:
         simulator,
         optimization_result=None,
         inward_tilt_optimization_result=None,
+        alignment_optimization_result=None,
     )
 
     assert "I = [1.00, 2.00, 3.00]" in text

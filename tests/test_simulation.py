@@ -325,5 +325,29 @@ def test_inward_tilt_optimization_does_not_reduce_the_generated_twist() -> None:
         optimization_sample_count=31,
     )
 
-    assert 0.0 <= optimization.inward_tilt_deg <= 30.0
+    assert -30.0 <= optimization.inward_tilt_deg <= 30.0
     assert optimization.twist_turns >= baseline_twist_turns - 1e-8
+
+
+def test_alignment_optimization_does_not_worsen_mean_alignment() -> None:
+    """The alignment search returns a mean body-axis alignment no worse than baseline."""
+
+    simulator = SkaterFlightSimulator()
+    parameters = FlightSimulationParameters(
+        angular_velocity_rps=(0.1, 0.2, 2.0),
+        takeoff_vertical_velocity=0.50,
+        somersault_tilt_deg=8.0,
+        inward_tilt_deg=0.0,
+        sample_count=41,
+    )
+    baseline_result = simulator.simulate(parameters)
+    baseline_mean_alignment = simulator.mean_body_axis_alignment_deg(baseline_result)
+
+    optimization = simulator.optimize_inward_tilt_for_alignment(
+        parameters,
+        max_iterations=8,
+        optimization_sample_count=31,
+    )
+
+    assert -30.0 <= optimization.inward_tilt_deg <= 30.0
+    assert optimization.mean_alignment_deg <= baseline_mean_alignment + 1e-8
