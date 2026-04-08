@@ -42,6 +42,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_selector.value_selected == "100%"
         assert app.playback_menu_visible is False
         assert app.playback_menu_axis.get_visible() is False
+        assert app.retune_pd_button.label.get_text() == "Retuner PD"
         assert app.speed_button.label.get_text() == "Vitesse 100%"
         assert len(app.control_section_titles) == 4
         assert app.control_section_titles[0].get_text() == "Moment cinetique global"
@@ -126,8 +127,8 @@ def test_animation_rewinds_to_the_start_when_playback_reaches_the_end() -> None:
         plt.close(app.figure)
 
 
-def test_enabling_stabilization_runs_automatic_pd_tuning() -> None:
-    """Turning on stabilization automatically tunes and applies the PD gains."""
+def test_enabling_stabilization_does_not_auto_tune_pd_controller() -> None:
+    """Turning on stabilization keeps the current gains until explicit retuning."""
 
     app = SkatingAerialAlignmentApp()
     try:
@@ -136,9 +137,45 @@ def test_enabling_stabilization_runs_automatic_pd_tuning() -> None:
         app.stabilization_checkbox.set_active(0)
 
         assert app.parameters.stabilize_trunk is True
+        assert app.optimization_result is None
+        assert app.parameters.controller == initial_controller
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_retune_pd_button_runs_explicit_pd_tuning() -> None:
+    """The explicit retune button calibrates and applies the PD controller."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        initial_controller = app.parameters.controller
+        app.stabilization_checkbox.set_active(0)
+
+        app._retune_pd_controller(None)
+
+        assert app.parameters.stabilize_trunk is True
         assert app.optimization_result is not None
         assert app.parameters.controller == app.optimization_result.controller
         assert app.parameters.controller != initial_controller
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_parameter_change_invalidates_previous_pd_tuning_result() -> None:
+    """Changing the scenario clears the displayed PD optimization result."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(0)
+        app._retune_pd_controller(None)
+
+        assert app.optimization_result is not None
+
+        app.sliders["twist_rps"].set_val(app.sliders["twist_rps"].val + 0.1)
+
+        assert app.optimization_result is None
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
