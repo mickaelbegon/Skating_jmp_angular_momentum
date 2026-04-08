@@ -242,6 +242,7 @@ class SkatingAerialAlignmentApp:
         self.ax_trunk = self.figure.add_subplot(grid[2, 1], sharex=self.ax_alignment)
         self.ax_torque = self.figure.add_subplot(grid[3, 1], sharex=self.ax_alignment)
         self.ax_inertia = self.figure.add_subplot(grid[4, 1], sharex=self.ax_alignment)
+        self.ax_inertia_twist_speed = self.ax_inertia.twinx()
 
         self.ax_3d.set_title("Animation 3D")
         self.ax_alignment.set_title("Angle(moment cinetique, axe longitudinal)")
@@ -256,6 +257,7 @@ class SkatingAerialAlignmentApp:
         self.ax_trunk.set_ylabel("deg")
         self.ax_torque.set_ylabel("N.m")
         self.ax_inertia.set_ylabel("kg.m^2")
+        self.ax_inertia_twist_speed.set_ylabel("omega_twist (rad/s)")
         self.ax_inertia.set_xlabel("Temps (s)")
         for axis in (
             self.ax_alignment,
@@ -482,7 +484,20 @@ class SkatingAerialAlignmentApp:
             linewidth=2.6,
             label="||H|| / |omega_vrille|",
         )
-        self.ax_inertia.legend(loc="upper left")
+        (self.twist_speed_line,) = self.ax_inertia_twist_speed.plot(
+            [],
+            [],
+            color="#8C564B",
+            linewidth=2.0,
+            linestyle="--",
+            label="omega_twist",
+        )
+        inertia_handles = [self.twist_inertia_line, self.twist_speed_line]
+        self.ax_inertia.legend(
+            inertia_handles,
+            [line.get_label() for line in inertia_handles],
+            loc="upper left",
+        )
 
         self.time_cursors = [
             axis.axvline(0.0, color="black", linestyle="--", linewidth=1.0)
@@ -493,6 +508,7 @@ class SkatingAerialAlignmentApp:
                 self.ax_trunk,
                 self.ax_torque,
                 self.ax_inertia,
+                self.ax_inertia_twist_speed,
             )
         ]
 
@@ -642,6 +658,7 @@ class SkatingAerialAlignmentApp:
             time,
             self.result.twist_inertia_proxy,
         )
+        self.twist_speed_line.set_data(time, self.result.twist_rotation_speed)
 
         self._autoscale_axis(self.ax_alignment, time, [self.result.body_axis_alignment_deg])
         self._autoscale_axis(
@@ -656,6 +673,11 @@ class SkatingAerialAlignmentApp:
             self.ax_inertia,
             time,
             [self.result.twist_inertia_proxy[np.isfinite(self.result.twist_inertia_proxy)]],
+        )
+        self._autoscale_axis(
+            self.ax_inertia_twist_speed,
+            time,
+            [self.result.twist_rotation_speed],
         )
 
         self._set_3d_bounds()

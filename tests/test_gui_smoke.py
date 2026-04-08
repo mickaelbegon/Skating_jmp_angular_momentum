@@ -36,7 +36,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert len(x_data) == app.result.time.size
         assert len(y_data) == app.result.time.size
         assert len(z_data) == app.result.time.size
-        assert len(app.time_cursors) == 6
+        assert len(app.time_cursors) == 7
         assert app.ground_surface is not None
         assert app.precession_cone_line is not None
         assert app.playback_selector.value_selected == "100%"
@@ -55,6 +55,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.ax_rotation.get_position().x1 < 0.96
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
+        assert app.ax_inertia_twist_speed.get_ylabel() == "omega_twist (rad/s)"
+        assert app.twist_speed_line is not None
         assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
         assert mpl.rcParams["axes3d.mouserotationstyle"] == "azel"
         assert app.ax_inertia.get_xlabel() == "Temps (s)"
