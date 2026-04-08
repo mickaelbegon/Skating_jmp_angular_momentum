@@ -22,6 +22,9 @@ def test_biomod_declares_zero_gravity_and_expected_segments() -> None:
     assert "segment\thead" in text
     assert "marker\tpelvis_thorax_joint_center" in text
     assert "marker\tsternum" in text
+    assert "\ttranslations\txyz" in text
+    assert "\trotations\txyz" in text
+    assert "// Root rotations: somersault, inward tilt, twist." in text
     assert biomod.q_size() == 9
 
 

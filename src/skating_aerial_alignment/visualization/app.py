@@ -201,7 +201,7 @@ class SkatingAerialAlignmentApp:
         )
         self.playback_text_artist = self.figure.text(
             0.69,
-            0.215,
+            0.225,
             "",
             fontsize=9,
         )
@@ -228,12 +228,12 @@ class SkatingAerialAlignmentApp:
         grid = self.figure.add_gridspec(
             5,
             2,
-            left=0.06,
-            right=0.98,
+            left=0.055,
+            right=0.95,
             top=0.90,
-            bottom=0.35,
+            bottom=0.335,
             hspace=0.38,
-            wspace=0.24,
+            wspace=0.20,
         )
         self.ax_3d = self.figure.add_subplot(grid[:, 0], projection="3d")
         self.ax_alignment = self.figure.add_subplot(grid[0, 1])
@@ -297,25 +297,25 @@ class SkatingAerialAlignmentApp:
             self.control_panels[name] = panel
             self.control_section_titles.append(title_artist)
 
-        make_panel("momentum", [0.06, 0.05, 0.28, 0.18], "Moment cinetique global")
-        make_panel("flight", [0.36, 0.05, 0.28, 0.18], "Vol et posture")
-        make_panel("modes", [0.66, 0.05, 0.31, 0.18], "Modes et lecture")
-        make_panel("time", [0.06, 0.245, 0.91, 0.05], "Navigation temporelle")
+        make_panel("momentum", [0.05, 0.04, 0.29, 0.205], "Moment cinetique global")
+        make_panel("flight", [0.355, 0.04, 0.29, 0.205], "Vol et posture")
+        make_panel("modes", [0.665, 0.04, 0.305, 0.205], "Modes et lecture")
+        make_panel("time", [0.05, 0.255, 0.92, 0.065], "Navigation temporelle")
 
         slider_specs = [
             (
                 "salto_rps",
-                [0.10, 0.190, 0.20, 0.0075],
+                [0.09, 0.196, 0.21, 0.0075],
                 "Hx eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.10, 0.146, 0.20, 0.0075], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.10, 0.102, 0.20, 0.0075], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.09, 0.149, 0.21, 0.0075], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.09, 0.102, 0.21, 0.0075], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
             (
                 "backward_velocity",
-                [0.40, 0.190, 0.20, 0.0075],
+                [0.385, 0.196, 0.21, 0.0075],
                 "V_arr (m/s)",
                 1.0,
                 5.0,
@@ -323,7 +323,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "flight_time",
-                [0.40, 0.146, 0.20, 0.0075],
+                [0.385, 0.149, 0.21, 0.0075],
                 "Temps de vol (s)",
                 0.4,
                 0.8,
@@ -333,7 +333,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "somersault_tilt",
-                [0.40, 0.102, 0.20, 0.0075],
+                [0.385, 0.102, 0.21, 0.0075],
                 "Incl. salto (deg)",
                 0.0,
                 30.0,
@@ -341,7 +341,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "inward_tilt",
-                [0.40, 0.058, 0.20, 0.0075],
+                [0.385, 0.055, 0.21, 0.0075],
                 "Incl. int. (deg)",
                 0.0,
                 30.0,
@@ -358,19 +358,19 @@ class SkatingAerialAlignmentApp:
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
 
-        speed_button_axis = self.figure.add_axes([0.69, 0.158, 0.10, 0.038])
+        speed_button_axis = self.figure.add_axes([0.68, 0.165, 0.105, 0.040])
         self.speed_button = Button(speed_button_axis, "Vitesse 100%")
         self.speed_button.on_clicked(self._toggle_playback_menu)
 
-        pause_axis = self.figure.add_axes([0.80, 0.158, 0.08, 0.038])
+        pause_axis = self.figure.add_axes([0.795, 0.165, 0.085, 0.040])
         self.pause_button = Button(pause_axis, "Pause")
         self.pause_button.on_clicked(self._toggle_pause)
 
-        reset_axis = self.figure.add_axes([0.89, 0.158, 0.07, 0.038])
+        reset_axis = self.figure.add_axes([0.892, 0.165, 0.070, 0.040])
         self.reset_button = Button(reset_axis, "Reset")
         self.reset_button.on_clicked(self._reset_controls)
 
-        checkbox_axis = self.figure.add_axes([0.69, 0.070, 0.26, 0.060])
+        checkbox_axis = self.figure.add_axes([0.69, 0.078, 0.26, 0.072])
         checkbox_axis.set_facecolor("none")
         for spine in checkbox_axis.spines.values():
             spine.set_visible(False)
@@ -385,7 +385,7 @@ class SkatingAerialAlignmentApp:
         )
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
-        playback_axis = self.figure.add_axes([0.69, 0.095, 0.12, 0.055])
+        playback_axis = self.figure.add_axes([0.68, 0.105, 0.13, 0.060])
         self.playback_selector = SafeRadioButtons(
             playback_axis,
             labels=("100%", "50%", "25%"),
@@ -400,7 +400,7 @@ class SkatingAerialAlignmentApp:
             child.set_visible(False)
         self.playback_menu_axis = playback_axis
 
-        time_axis = self.figure.add_axes([0.10, 0.262, 0.82, 0.0075])
+        time_axis = self.figure.add_axes([0.09, 0.279, 0.86, 0.0075])
         self.time_slider = Slider(
             time_axis,
             label="Temps (s)",
@@ -629,7 +629,7 @@ class SkatingAerialAlignmentApp:
         )
         self.com_trajectory_line.set_3d_properties(self.result.center_of_mass[:, 2])
         self.alignment_line.set_data(time, self.result.body_axis_alignment_deg)
-        self.twist_line.set_data(time, np.rad2deg(self.result.q[:, 5]))
+        self.twist_line.set_data(time, np.rad2deg(self.result.twist_angle))
         self.salto_line.set_data(time, np.rad2deg(self.result.q[:, 3]))
 
         trunk_angles_deg = np.rad2deg(self.result.q[:, 6:9])
@@ -647,7 +647,7 @@ class SkatingAerialAlignmentApp:
         self._autoscale_axis(
             self.ax_rotation,
             time,
-            [np.rad2deg(self.result.q[:, 5])],
+            [np.rad2deg(self.result.twist_angle)],
         )
         self._autoscale_axis(self.ax_rotation_salto, time, [np.rad2deg(self.result.q[:, 3])])
         self._autoscale_axis(self.ax_trunk, time, [column for column in trunk_angles_deg.T])
@@ -835,6 +835,8 @@ class SkatingAerialAlignmentApp:
             if self.frame_index >= last_frame_index:
                 self.is_paused = True
                 self.pause_button.label.set_text("Play")
+                self.frame_index = 0
+                self._draw_frame(self.frame_index)
             self.figure.canvas.draw_idle()
         return []
 

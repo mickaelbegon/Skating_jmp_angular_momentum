@@ -51,6 +51,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
         assert app.sliders["salto_rps"].ax.get_position().height < 0.009
         assert app.time_slider.ax.get_position().height < 0.009
+        assert app.control_panels["momentum"].get_position().height > 0.19
+        assert app.ax_rotation.get_position().x1 < 0.96
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
         assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
@@ -101,8 +103,8 @@ def test_time_slider_moves_to_the_requested_frame_and_pauses_animation() -> None
         plt.close(app.figure)
 
 
-def test_animation_stops_at_last_frame_without_looping() -> None:
-    """Playback reaches the last frame, then pauses instead of restarting."""
+def test_animation_rewinds_to_the_start_when_playback_reaches_the_end() -> None:
+    """Playback pauses and rewinds once the final frame has been displayed."""
 
     app = SkatingAerialAlignmentApp()
     try:
@@ -113,9 +115,10 @@ def test_animation_stops_at_last_frame_without_looping() -> None:
 
         app._animate(0)
 
-        assert app.frame_index == len(app.result.time) - 1
+        assert app.frame_index == 0
         assert app.is_paused is True
         assert app.pause_button.label.get_text() == "Play"
+        assert app.time_slider.val == pytest.approx(0.0)
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

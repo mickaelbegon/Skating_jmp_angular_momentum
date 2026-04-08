@@ -7,7 +7,7 @@ from pathlib import Path
 
 import biorbd
 import numpy as np
-from scipy.integrate import solve_ivp
+from scipy.integrate import cumulative_trapezoid, solve_ivp
 from scipy.optimize import minimize, minimize_scalar
 
 from skating_aerial_alignment.modeling import SkaterFlightBiomod
@@ -58,6 +58,7 @@ class FlightSimulationResult:
     body_axis_alignment_deg: np.ndarray
     initial_body_axis_alignment_deg: float
     twist_rotation_speed: np.ndarray
+    twist_angle: np.ndarray
     twist_inertia_proxy: np.ndarray
     markers: np.ndarray
     center_of_mass: np.ndarray
@@ -224,6 +225,19 @@ class SkaterFlightSimulator:
         )
         forward_axis = self._normalize(np.cross(longitudinal_axis, lateral_axis))
         return np.column_stack((lateral_axis, forward_axis, longitudinal_axis))
+
+    def body_angular_velocity(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
+        """Return the whole-body angular velocity associated with the floating root."""
+
+        q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
+        qdot_biorbd = biorbd.GeneralizedVelocity(np.asarray(qdot, dtype=float))
+        return self.model.bodyAngularVelocity(q_biorbd, qdot_biorbd, True).to_array()
+
+    def longitudinal_twist_rate(self, q: np.ndarray, qdot: np.ndarray) -> float:
+        """Return the twist rate projected onto the body longitudinal axis."""
+
+        body_axis = self.body_frame(q)[:, 2]
+        return float(np.dot(self.body_angular_velocity(q, qdot), body_axis))
 
     def initial_generalized_coordinates(self, parameters: FlightSimulationParameters) -> np.ndarray:
         """Build the initial generalized coordinates from the requested takeoff posture."""
@@ -503,7 +517,18 @@ class SkaterFlightSimulator:
                 angular_momentum[frame_index],
                 body_axis[frame_index],
             )
-        twist_rotation_speed = np.asarray(qdot[:, 5], dtype=float)
+        twist_rotation_speed = np.zeros(time.size, dtype=float)
+        for frame_index, (q_frame, qdot_frame, body_axis_frame) in enumerate(
+            zip(q, qdot, body_axis)
+        ):
+            twist_rotation_speed[frame_index] = float(
+                np.dot(self.body_angular_velocity(q_frame, qdot_frame), body_axis_frame)
+            )
+        twist_angle = (
+            cumulative_trapezoid(twist_rotation_speed, time, initial=0.0)
+            if time.size > 1
+            else np.zeros(1, dtype=float)
+        )
         twist_inertia_proxy = np.divide(
             np.linalg.norm(angular_momentum, axis=1),
             np.abs(twist_rotation_speed),
@@ -521,6 +546,7 @@ class SkaterFlightSimulator:
             body_axis_alignment_deg=alignment,
             initial_body_axis_alignment_deg=float(alignment[0]),
             twist_rotation_speed=twist_rotation_speed,
+            twist_angle=twist_angle,
             twist_inertia_proxy=twist_inertia_proxy,
             markers=markers,
             center_of_mass=center_of_mass,
@@ -553,7 +579,7 @@ class SkaterFlightSimulator:
     def twist_accumulation_turns(result: FlightSimulationResult) -> float:
         """Return the absolute accumulated twist over the flight expressed in turns."""
 
-        twist_angle = float(result.q[-1, 5] - result.q[0, 5])
+        twist_angle = float(result.twist_angle[-1] - result.twist_angle[0])
         return abs(twist_angle) / (2.0 * np.pi)
 
     def tune_trunk_controller(

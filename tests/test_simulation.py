@@ -221,6 +221,32 @@ def test_twist_inertia_proxy_is_available_during_simulation() -> None:
     assert np.allclose(result.twist_inertia_proxy[finite_mask], expected_ratio)
 
 
+def test_twist_rotation_speed_tracks_longitudinal_body_spin_not_euler_rate() -> None:
+    """The reported twist speed is the spin about the body axis, not raw `qdot[5]`."""
+
+    simulator = SkaterFlightSimulator()
+    result = simulator.simulate(
+        FlightSimulationParameters(
+            angular_velocity_rps=(0.1, 0.4, 3.0),
+            takeoff_vertical_velocity=0.50,
+            somersault_tilt_deg=10.0,
+            inward_tilt_deg=8.0,
+            sample_count=21,
+        )
+    )
+
+    reconstructed_speed = np.array(
+        [
+            simulator.longitudinal_twist_rate(q_frame, qdot_frame)
+            for q_frame, qdot_frame in zip(result.q, result.qdot)
+        ]
+    )
+
+    assert np.allclose(result.twist_rotation_speed, reconstructed_speed)
+    assert not np.allclose(result.twist_rotation_speed, result.qdot[:, 5])
+    assert result.twist_angle.shape == (21,)
+
+
 def test_center_of_mass_trajectory_is_exposed_for_animation() -> None:
     """The simulation returns a center-of-mass trajectory with one point per frame."""
 
