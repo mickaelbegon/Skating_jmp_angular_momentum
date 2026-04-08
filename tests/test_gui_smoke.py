@@ -144,10 +144,10 @@ def test_enabling_stabilization_does_not_auto_tune_pd_controller() -> None:
         plt.close(app.figure)
 
 
-def test_retune_pd_button_runs_explicit_pd_tuning() -> None:
+def test_retune_pd_button_runs_explicit_pd_tuning(tmp_path) -> None:
     """The explicit retune button calibrates and applies the PD controller."""
 
-    app = SkatingAerialAlignmentApp()
+    app = SkatingAerialAlignmentApp(pd_cache_path=tmp_path / "pd_tuning_cache.json")
     try:
         initial_controller = app.parameters.controller
         app.stabilization_checkbox.set_active(0)
@@ -179,6 +179,31 @@ def test_parameter_change_invalidates_previous_pd_tuning_result() -> None:
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
+
+
+def test_pd_tuning_cache_is_reloaded_on_startup(tmp_path) -> None:
+    """A tuned PD controller is persisted and reused when the GUI starts again."""
+
+    cache_path = tmp_path / "pd_tuning_cache.json"
+
+    first_app = SkatingAerialAlignmentApp(pd_cache_path=cache_path)
+    try:
+        first_app.stabilization_checkbox.set_active(0)
+        first_app._retune_pd_controller(None)
+        tuned_controller = first_app.parameters.controller
+
+        assert cache_path.exists()
+    finally:
+        first_app.animation._draw_was_started = True
+        plt.close(first_app.figure)
+
+    second_app = SkatingAerialAlignmentApp(pd_cache_path=cache_path)
+    try:
+        assert second_app.parameters.controller == tuned_controller
+        assert len(second_app._pd_tuning_cache) >= 1
+    finally:
+        second_app.animation._draw_was_started = True
+        plt.close(second_app.figure)
 
 
 def test_enabling_inward_tilt_optimization_updates_the_slider_and_result() -> None:

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -156,18 +158,26 @@ class SkatingAerialAlignmentApp:
     FACE_VIEW = (8.0, 90.0)
     DEFAULT_BACKWARD_VELOCITY_M_S = 2.0
 
-    def __init__(self) -> None:
+    def __init__(self, pd_cache_path: str | Path | None = None) -> None:
         """Create the figure, controls, and initial simulation."""
 
         mpl.rcParams["axes3d.mouserotationstyle"] = "azel"
         self.simulator = SkaterFlightSimulator()
-        self.parameters = FlightSimulationParameters()
-        self.result = self.simulator.simulate(self.parameters)
+        self.pd_cache_path = (
+            Path(pd_cache_path)
+            if pd_cache_path is not None
+            else Path("artifacts") / "pd_tuning_cache.json"
+        )
         self.optimization_result: PDOptimizationResult | None = None
         self.optimization_result_signature: tuple[float, ...] | None = None
         self.inward_tilt_optimization_result: InwardTiltOptimizationResult | None = None
         self._pd_tuning_cache: dict[tuple[float, ...], PDOptimizationResult] = {}
         self._inward_tilt_cache: dict[tuple[float, ...], InwardTiltOptimizationResult] = {}
+        cached_controller = self._load_pd_tuning_cache()
+        self.parameters = FlightSimulationParameters()
+        if cached_controller is not None:
+            self.parameters = replace(self.parameters, controller=cached_controller)
+        self.result = self.simulator.simulate(self.parameters)
         self.frame_index = 0
         self.is_paused = False
         self.frames_per_animation_step = 1
@@ -222,6 +232,81 @@ class SkatingAerialAlignmentApp:
             cache_frame_data=False,
         )
         self._update_animation_playback()
+
+    @staticmethod
+    def _controller_to_payload(controller) -> dict[str, list[float]]:
+        """Serialize a controller configuration into JSON-friendly lists."""
+
+        return {
+            "proportional_gains": list(controller.proportional_gains),
+            "derivative_gains": list(controller.derivative_gains),
+            "torque_limits": list(controller.torque_limits),
+        }
+
+    @staticmethod
+    def _controller_from_payload(payload):
+        """Deserialize a controller configuration from cached JSON data."""
+
+        return replace(
+            FlightSimulationParameters().controller,
+            proportional_gains=tuple(float(value) for value in payload["proportional_gains"]),
+            derivative_gains=tuple(float(value) for value in payload["derivative_gains"]),
+            torque_limits=tuple(float(value) for value in payload["torque_limits"]),
+        )
+
+    def _load_pd_tuning_cache(self):
+        """Load the persisted PD-tuning cache and return the last tuned controller."""
+
+        if not self.pd_cache_path.exists():
+            return None
+        try:
+            payload = json.loads(self.pd_cache_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            return None
+
+        for entry in payload.get("entries", []):
+            try:
+                signature = tuple(float(value) for value in entry["signature"])
+                optimization = PDOptimizationResult(
+                    controller=self._controller_from_payload(entry["controller"]),
+                    objective_value=float(entry["objective_value"]),
+                    iterations=int(entry["iterations"]),
+                    evaluations=int(entry["evaluations"]),
+                    success=bool(entry["success"]),
+                    message=str(entry["message"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            self._pd_tuning_cache[signature] = optimization
+
+        last_controller_payload = payload.get("last_controller")
+        if last_controller_payload is None:
+            return None
+        try:
+            return self._controller_from_payload(last_controller_payload)
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def _save_pd_tuning_cache(self, last_controller) -> None:
+        """Persist the current PD-tuning cache and last tuned controller to disk."""
+
+        payload = {
+            "entries": [
+                {
+                    "signature": list(signature),
+                    "controller": self._controller_to_payload(optimization.controller),
+                    "objective_value": optimization.objective_value,
+                    "iterations": optimization.iterations,
+                    "evaluations": optimization.evaluations,
+                    "success": optimization.success,
+                    "message": optimization.message,
+                }
+                for signature, optimization in self._pd_tuning_cache.items()
+            ],
+            "last_controller": self._controller_to_payload(last_controller),
+        }
+        self.pd_cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self.pd_cache_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _build_axes(self) -> None:
         """Create the main plotting axes."""
@@ -591,6 +676,7 @@ class SkatingAerialAlignmentApp:
             self._pd_tuning_cache[signature] = optimization
         self.optimization_result = optimization
         self.optimization_result_signature = signature
+        self._save_pd_tuning_cache(optimization.controller)
         return replace(parameters, controller=optimization.controller)
 
     def _invalidate_pd_optimization_if_stale(
