@@ -65,6 +65,20 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.figure.get_facecolor()[:3] == pytest.approx((0.9529, 0.9647, 0.9765), abs=1e-3)
         assert app.status_text_artist.get_bbox_patch() is not None
         assert app.details_text_artist.get_bbox_patch() is not None
+        app.figure.canvas.draw()
+        panel_by_slider = {
+            "salto_rps": "momentum",
+            "flight_time": "flight",
+            "inward_tilt": "flight",
+        }
+        for slider_name, panel_name in panel_by_slider.items():
+            slider = app.sliders[slider_name]
+            label_bbox = slider.label.get_window_extent(app.figure.canvas.get_renderer())
+            panel_bbox = app.control_panels[panel_name].get_window_extent()
+            assert label_bbox.x0 >= panel_bbox.x0 - 1.0
+        time_label_bbox = app.time_slider.label.get_window_extent(app.figure.canvas.get_renderer())
+        time_panel_bbox = app.control_panels["time"].get_window_extent()
+        assert time_label_bbox.x0 >= time_panel_bbox.x0 - 1.0
         assert all(label.get_visible() is False for label in app.ax_alignment.get_xticklabels())
         assert all(label.get_visible() is False for label in app.ax_rotation.get_xticklabels())
         assert app.frames_per_animation_step >= 1
