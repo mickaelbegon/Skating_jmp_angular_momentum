@@ -51,10 +51,10 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app._alignment_optimization_enabled() is False
         assert app.time_slider.valmin == 0.0
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
-        assert app.sliders["salto_rps"].ax.get_position().height < 0.009
-        assert app.time_slider.ax.get_position().height < 0.009
-        assert app.control_panels["momentum"].get_position().height > 0.19
-        assert app.ax_rotation.get_position().x1 < 0.96
+        assert 0.010 < app.sliders["salto_rps"].ax.get_position().height < 0.012
+        assert 0.010 < app.time_slider.ax.get_position().height < 0.012
+        assert app.control_panels["momentum"].get_position().height > 0.20
+        assert app.ax_rotation.get_position().x1 < 0.94
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
         assert app.ax_inertia_twist_speed.get_ylabel() == "omega_twist (deg/s)"
@@ -62,6 +62,9 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
         assert mpl.rcParams["axes3d.mouserotationstyle"] == "azel"
         assert app.ax_inertia.get_xlabel() == "Temps (s)"
+        assert app.figure.get_facecolor()[:3] == pytest.approx((0.9529, 0.9647, 0.9765), abs=1e-3)
+        assert app.status_text_artist.get_bbox_patch() is not None
+        assert app.details_text_artist.get_bbox_patch() is not None
         assert all(label.get_visible() is False for label in app.ax_alignment.get_xticklabels())
         assert all(label.get_visible() is False for label in app.ax_rotation.get_xticklabels())
         assert app.frames_per_animation_step >= 1

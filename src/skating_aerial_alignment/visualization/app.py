@@ -168,6 +168,12 @@ class SkatingAerialAlignmentApp:
     ALIGNMENT_OPTIMIZATION_INDEX = 3
     TWIST_OPTIMIZATION_LABEL = "Optimiser incl. interieure"
     ALIGNMENT_OPTIMIZATION_LABEL = "Optimiser alignement"
+    PRIMARY_BLUE = "#2E6FBB"
+    PANEL_BACKGROUND = "#FFFFFF"
+    PANEL_BORDER = "#D6DEE8"
+    FIGURE_BACKGROUND = "#F3F6F9"
+    TEXT_PRIMARY = "#14212B"
+    TEXT_SECONDARY = "#475467"
 
     def __init__(self, pd_cache_path: str | Path | None = None) -> None:
         """Create the figure, controls, and initial simulation."""
@@ -201,21 +207,32 @@ class SkatingAerialAlignmentApp:
         self._updating_checkbox_state = False
         self.playback_menu_visible = False
 
-        self.figure = plt.figure(figsize=(16, 11))
+        self.figure = plt.figure(figsize=(16, 11), facecolor=self.FIGURE_BACKGROUND)
         self.figure.suptitle(
             "Phase aerienne d'un saut en patinage: alignement moment cinetique / axe du corps",
-            fontsize=15,
-            y=0.98,
+            fontsize=18,
+            fontweight="semibold",
+            color=self.TEXT_PRIMARY,
+            y=0.976,
         )
         self.status_text_artist = self.figure.text(
-            0.06,
+            0.05,
             0.945,
             format_status_text(self.parameters, self.result, self.simulator),
-            fontsize=10,
+            fontsize=10.2,
+            color=self.TEXT_PRIMARY,
+            va="center",
+            wrap=True,
+            bbox={
+                "boxstyle": "round,pad=0.28",
+                "facecolor": self.PANEL_BACKGROUND,
+                "edgecolor": self.PANEL_BORDER,
+                "linewidth": 0.9,
+            },
         )
         self.details_text_artist = self.figure.text(
-            0.06,
-            0.922,
+            0.05,
+            0.915,
             format_inertia_and_controller_text(
                 self.parameters,
                 self.simulator,
@@ -223,13 +240,24 @@ class SkatingAerialAlignmentApp:
                 self.inward_tilt_optimization_result,
                 self.alignment_optimization_result,
             ),
-            fontsize=9,
+            fontsize=9.2,
+            color=self.TEXT_SECONDARY,
+            va="center",
+            wrap=True,
+            bbox={
+                "boxstyle": "round,pad=0.26",
+                "facecolor": self.PANEL_BACKGROUND,
+                "edgecolor": self.PANEL_BORDER,
+                "linewidth": 0.9,
+            },
         )
         self.playback_text_artist = self.figure.text(
-            0.69,
-            0.225,
+            0.955,
+            0.223,
             "",
-            fontsize=9,
+            fontsize=9.1,
+            color=self.TEXT_SECONDARY,
+            ha="right",
         )
 
         self._build_axes()
@@ -329,12 +357,13 @@ class SkatingAerialAlignmentApp:
         grid = self.figure.add_gridspec(
             5,
             2,
-            left=0.055,
-            right=0.95,
-            top=0.90,
-            bottom=0.335,
-            hspace=0.38,
-            wspace=0.20,
+            left=0.045,
+            right=0.928,
+            top=0.885,
+            bottom=0.345,
+            hspace=0.42,
+            wspace=0.24,
+            width_ratios=(1.07, 0.93),
         )
         self.ax_3d = self.figure.add_subplot(grid[:, 0], projection="3d")
         self.ax_alignment = self.figure.add_subplot(grid[0, 1])
@@ -372,6 +401,53 @@ class SkatingAerialAlignmentApp:
         self.ax_3d.set_ylabel("y")
         self.ax_3d.set_zlabel("z")
         self.ax_3d.view_init(elev=18, azim=-70, roll=0.0, vertical_axis="z")
+        self._style_axes()
+
+    def _style_axes(self) -> None:
+        """Apply a consistent visual treatment to the plot area."""
+
+        primary_axes = (
+            self.ax_alignment,
+            self.ax_rotation,
+            self.ax_trunk,
+            self.ax_torque,
+            self.ax_inertia,
+        )
+        for axis in primary_axes:
+            axis.set_facecolor(self.PANEL_BACKGROUND)
+            axis.grid(True, color="#D7DEE7", linewidth=0.8, alpha=0.72)
+            axis.set_axisbelow(True)
+            axis.tick_params(labelsize=9.5, colors="#344054")
+            axis.title.set_fontsize(11.5)
+            axis.title.set_fontweight("semibold")
+            axis.title.set_color(self.TEXT_PRIMARY)
+            for spine in axis.spines.values():
+                spine.set_color("#C7D0DA")
+                spine.set_linewidth(0.9)
+
+        for axis in (self.ax_rotation_salto, self.ax_inertia_twist_speed):
+            axis.tick_params(labelsize=9.5, colors="#344054", pad=6)
+            for side in ("right", "top"):
+                axis.spines[side].set_color("#C7D0DA")
+                axis.spines[side].set_linewidth(0.9)
+
+        self.ax_rotation.set_ylabel("Vrille (deg)", color="#FF7F0E")
+        self.ax_rotation.tick_params(axis="y", colors="#FF7F0E")
+        self.ax_rotation_salto.set_ylabel("Salto (deg)", color="#1F77B4", labelpad=8)
+        self.ax_rotation_salto.tick_params(axis="y", colors="#1F77B4")
+        self.ax_inertia.set_ylabel("kg.m^2", color="#2CA02C")
+        self.ax_inertia.tick_params(axis="y", colors="#2CA02C")
+        self.ax_inertia_twist_speed.set_ylabel("omega_twist (deg/s)", color="#8C564B", labelpad=8)
+        self.ax_inertia_twist_speed.tick_params(axis="y", colors="#8C564B")
+
+        self.ax_3d.set_facecolor(self.PANEL_BACKGROUND)
+        self.ax_3d.title.set_fontsize(12.0)
+        self.ax_3d.title.set_fontweight("semibold")
+        self.ax_3d.title.set_color(self.TEXT_PRIMARY)
+        for axis in (self.ax_3d.xaxis, self.ax_3d.yaxis, self.ax_3d.zaxis):
+            axis.set_pane_color((1.0, 1.0, 1.0, 0.98))
+            axis.line.set_color("#BBC5D0")
+        self.ax_3d.tick_params(labelsize=9.5, colors="#344054")
 
     def _build_controls(self) -> None:
         """Create sliders, buttons, and checkboxes."""
@@ -381,44 +457,46 @@ class SkatingAerialAlignmentApp:
 
         def make_panel(name: str, rect: list[float], title: str):
             panel = self.figure.add_axes(rect)
-            panel.set_facecolor("#F7F8FA")
+            panel.set_facecolor(self.PANEL_BACKGROUND)
             panel.set_xticks([])
             panel.set_yticks([])
             panel.set_xlim(0.0, 1.0)
             panel.set_ylim(0.0, 1.0)
             for spine in panel.spines.values():
-                spine.set_edgecolor("#D0D7DE")
-                spine.set_linewidth(1.0)
+                spine.set_edgecolor(self.PANEL_BORDER)
+                spine.set_linewidth(1.15)
             title_artist = panel.text(
                 0.03,
-                0.92,
+                0.90,
                 title,
-                fontsize=10,
+                fontsize=11.2,
                 fontweight="bold",
+                color=self.TEXT_PRIMARY,
                 va="top",
             )
+            panel.axhline(0.82, xmin=0.03, xmax=0.97, color="#EEF2F6", linewidth=1.0)
             self.control_panels[name] = panel
             self.control_section_titles.append(title_artist)
 
-        make_panel("momentum", [0.05, 0.04, 0.29, 0.205], "Moment cinetique global")
-        make_panel("flight", [0.355, 0.04, 0.29, 0.205], "Vol et posture")
-        make_panel("modes", [0.665, 0.04, 0.305, 0.205], "Modes et lecture")
-        make_panel("time", [0.05, 0.255, 0.92, 0.065], "Navigation temporelle")
+        make_panel("momentum", [0.04, 0.03, 0.30, 0.21], "Moment cinetique global")
+        make_panel("flight", [0.355, 0.03, 0.30, 0.21], "Vol et posture")
+        make_panel("modes", [0.67, 0.03, 0.30, 0.21], "Modes et lecture")
+        make_panel("time", [0.04, 0.248, 0.93, 0.068], "Navigation temporelle")
 
         slider_specs = [
             (
                 "salto_rps",
-                [0.09, 0.196, 0.21, 0.0075],
+                [0.08, 0.185, 0.22, 0.0105],
                 "Hx eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.09, 0.149, 0.21, 0.0075], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.09, 0.102, 0.21, 0.0075], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.08, 0.136, 0.22, 0.0105], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.08, 0.087, 0.22, 0.0105], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
             (
                 "backward_velocity",
-                [0.385, 0.196, 0.21, 0.0075],
+                [0.395, 0.185, 0.22, 0.0105],
                 "V_arr (m/s)",
                 1.0,
                 5.0,
@@ -426,7 +504,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "flight_time",
-                [0.385, 0.149, 0.21, 0.0075],
+                [0.395, 0.136, 0.22, 0.0105],
                 "Temps de vol (s)",
                 0.4,
                 0.8,
@@ -436,7 +514,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "somersault_tilt",
-                [0.385, 0.102, 0.21, 0.0075],
+                [0.395, 0.087, 0.22, 0.0105],
                 "Incl. salto (deg)",
                 0.0,
                 30.0,
@@ -444,7 +522,7 @@ class SkatingAerialAlignmentApp:
             ),
             (
                 "inward_tilt",
-                [0.385, 0.055, 0.21, 0.0075],
+                [0.395, 0.038, 0.22, 0.0105],
                 "Incl. int. (deg)",
                 -30.0,
                 30.0,
@@ -456,28 +534,41 @@ class SkatingAerialAlignmentApp:
         for name, rect, label, vmin, vmax, initial in slider_specs:
             axis = self.figure.add_axes(rect)
             slider = Slider(axis, label=label, valmin=vmin, valmax=vmax, valinit=initial)
-            slider.label.set_fontsize(7.6)
-            slider.valtext.set_fontsize(7.6)
+            self._style_slider(slider)
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
 
-        retune_pd_axis = self.figure.add_axes([0.68, 0.165, 0.105, 0.040])
+        retune_pd_axis = self.figure.add_axes([0.685, 0.157, 0.105, 0.042])
         self.retune_pd_button = Button(retune_pd_axis, "Retuner PD")
+        self._style_button(self.retune_pd_button, fill="#FFFFFF", edge="#B9C5D3")
         self.retune_pd_button.on_clicked(self._retune_pd_controller)
 
-        speed_button_axis = self.figure.add_axes([0.795, 0.165, 0.090, 0.040])
+        speed_button_axis = self.figure.add_axes([0.805, 0.157, 0.105, 0.042])
         self.speed_button = Button(speed_button_axis, "Vitesse 100%")
+        self._style_button(self.speed_button, fill="#FFFFFF", edge="#B9C5D3")
         self.speed_button.on_clicked(self._toggle_playback_menu)
 
-        pause_axis = self.figure.add_axes([0.895, 0.165, 0.060, 0.040])
+        pause_axis = self.figure.add_axes([0.685, 0.103, 0.105, 0.042])
         self.pause_button = Button(pause_axis, "Pause")
+        self._style_button(
+            self.pause_button,
+            fill="#E8F1FF",
+            edge="#8CB5F4",
+            text_color="#184B94",
+        )
         self.pause_button.on_clicked(self._toggle_pause)
 
-        reset_axis = self.figure.add_axes([0.895, 0.115, 0.060, 0.040])
+        reset_axis = self.figure.add_axes([0.805, 0.103, 0.105, 0.042])
         self.reset_button = Button(reset_axis, "Reset")
+        self._style_button(
+            self.reset_button,
+            fill="#FFF6F3",
+            edge="#E7B7A8",
+            text_color="#9A4024",
+        )
         self.reset_button.on_clicked(self._reset_controls)
 
-        checkbox_axis = self.figure.add_axes([0.69, 0.078, 0.26, 0.072])
+        checkbox_axis = self.figure.add_axes([0.72, 0.050, 0.20, 0.052])
         checkbox_axis.set_facecolor("none")
         for spine in checkbox_axis.spines.values():
             spine.set_visible(False)
@@ -491,24 +582,27 @@ class SkatingAerialAlignmentApp:
             ],
             actives=[False, False, False, False],
         )
+        self._style_checkboxes(self.stabilization_checkbox)
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
-        playback_axis = self.figure.add_axes([0.785, 0.098, 0.10, 0.060])
+        playback_axis = self.figure.add_axes([0.805, 0.205, 0.105, 0.060])
         self.playback_selector = SafeRadioButtons(
             playback_axis,
             labels=("100%", "50%", "25%"),
             active=0,
         )
         self.playback_selector.on_clicked(self._on_playback_change)
-        playback_axis.set_facecolor("none")
+        playback_axis.set_facecolor(self.PANEL_BACKGROUND)
         for spine in playback_axis.spines.values():
-            spine.set_visible(False)
+            spine.set_edgecolor(self.PANEL_BORDER)
+            spine.set_linewidth(1.0)
+        self._style_radio_buttons(self.playback_selector)
         playback_axis.set_visible(False)
         for child in playback_axis.get_children():
             child.set_visible(False)
         self.playback_menu_axis = playback_axis
 
-        time_axis = self.figure.add_axes([0.09, 0.279, 0.86, 0.0075])
+        time_axis = self.figure.add_axes([0.08, 0.276, 0.86, 0.0105])
         self.time_slider = Slider(
             time_axis,
             label="Temps (s)",
@@ -516,9 +610,80 @@ class SkatingAerialAlignmentApp:
             valmax=max(self.result.flight_time, 1e-6),
             valinit=0.0,
         )
-        self.time_slider.label.set_fontsize(7.6)
-        self.time_slider.valtext.set_fontsize(7.6)
+        self._style_slider(self.time_slider)
         self.time_slider.on_changed(self._on_time_slider_change)
+
+    def _style_slider(self, slider: Slider) -> None:
+        """Apply a more legible slider styling."""
+
+        slider.ax.set_facecolor("none")
+        slider.label.set_fontsize(8.5)
+        slider.label.set_color(self.TEXT_PRIMARY)
+        slider.valtext.set_fontsize(8.5)
+        slider.valtext.set_color(self.TEXT_SECONDARY)
+        if hasattr(slider, "track"):
+            slider.track.set_color("#D9E1E8")
+        if hasattr(slider, "poly"):
+            slider.poly.set_facecolor(self.PRIMARY_BLUE)
+            slider.poly.set_alpha(0.92)
+        if hasattr(slider, "vline"):
+            slider.vline.set_visible(False)
+        handle = getattr(slider, "_handle", None)
+        if handle is not None:
+            handle.set_markerfacecolor("#FFFFFF")
+            handle.set_markeredgecolor(self.PRIMARY_BLUE)
+            handle.set_markeredgewidth(1.3)
+            handle.set_markersize(6.5)
+        for spine in slider.ax.spines.values():
+            spine.set_visible(False)
+
+    def _style_button(
+        self,
+        button: Button,
+        *,
+        fill: str,
+        edge: str,
+        text_color: str = "#14212B",
+    ) -> None:
+        """Apply a cleaner visual treatment to a button."""
+
+        button.ax.set_facecolor(fill)
+        for spine in button.ax.spines.values():
+            spine.set_edgecolor(edge)
+            spine.set_linewidth(1.15)
+        button.color = fill
+        button.hovercolor = "#EDF3FA"
+        button.label.set_fontsize(10.0)
+        button.label.set_color(text_color)
+
+    def _style_checkboxes(self, checkbox: SafeCheckButtons) -> None:
+        """Make the checkbox group more legible and less cramped."""
+
+        item_count = len(checkbox.labels)
+        for label in checkbox.labels:
+            label.set_fontsize(9.2)
+            label.set_color(self.TEXT_PRIMARY)
+        if hasattr(checkbox, "_frames"):
+            checkbox._frames.set_sizes(np.full(item_count, 58.0))
+            checkbox._frames.set_facecolors(np.tile([[1.0, 1.0, 1.0, 1.0]], (item_count, 1)))
+            checkbox._frames.set_edgecolors(np.tile([[0.56, 0.63, 0.70, 1.0]], (item_count, 1)))
+            checkbox._frames.set_linewidths(np.full(item_count, 1.0))
+        if hasattr(checkbox, "_checks"):
+            checkbox._checks.set_sizes(np.full(item_count, 58.0))
+            checkbox._checks.set_edgecolors(np.tile([[0.18, 0.44, 0.73, 1.0]], (item_count, 1)))
+            checkbox._checks.set_linewidths(np.full(item_count, 1.2))
+
+    def _style_radio_buttons(self, radio: SafeRadioButtons) -> None:
+        """Style the playback-speed popup menu consistently with the control cards."""
+
+        for label in radio.labels:
+            label.set_fontsize(9.0)
+            label.set_color(self.TEXT_PRIMARY)
+        if hasattr(radio, "_buttons"):
+            radio._buttons.set_sizes(np.full(len(radio.labels), 54.0))
+            radio._buttons.set_edgecolors("#90A0B2")
+        if hasattr(radio, "_active_colors"):
+            radio._active_colors = [self.PRIMARY_BLUE for _ in radio.labels]
 
     def _build_plot_artists(self) -> None:
         """Initialize the lines that will be updated after each simulation."""
@@ -569,19 +734,38 @@ class SkatingAerialAlignmentApp:
             rotation_handles,
             [line.get_label() for line in rotation_handles],
             loc="upper left",
+            frameon=True,
+            framealpha=0.92,
+            edgecolor=self.PANEL_BORDER,
+            facecolor=self.PANEL_BACKGROUND,
+            fontsize=8.8,
         )
 
         self.trunk_lines = [
             self.ax_trunk.plot([], [], label=label, linewidth=2.0)[0]
             for label in ("Tronc x", "Tronc y", "Tronc z")
         ]
-        self.ax_trunk.legend(loc="upper left")
+        self.ax_trunk.legend(
+            loc="upper left",
+            frameon=True,
+            framealpha=0.92,
+            edgecolor=self.PANEL_BORDER,
+            facecolor=self.PANEL_BACKGROUND,
+            fontsize=8.8,
+        )
 
         self.torque_lines = [
             self.ax_torque.plot([], [], label=label, linewidth=2.0)[0]
             for label in ("Couple x", "Couple y", "Couple z")
         ]
-        self.ax_torque.legend(loc="upper left")
+        self.ax_torque.legend(
+            loc="upper left",
+            frameon=True,
+            framealpha=0.92,
+            edgecolor=self.PANEL_BORDER,
+            facecolor=self.PANEL_BACKGROUND,
+            fontsize=8.8,
+        )
 
         (self.twist_inertia_line,) = self.ax_inertia.plot(
             [],
@@ -603,6 +787,11 @@ class SkatingAerialAlignmentApp:
             inertia_handles,
             [line.get_label() for line in inertia_handles],
             loc="upper left",
+            frameon=True,
+            framealpha=0.92,
+            edgecolor=self.PANEL_BORDER,
+            facecolor=self.PANEL_BACKGROUND,
+            fontsize=8.8,
         )
 
         self.time_cursors = [
@@ -1112,22 +1301,28 @@ class SkatingAerialAlignmentApp:
     def _stabilization_enabled(self) -> bool:
         """Return whether trunk stabilization is enabled."""
 
-        return bool(self.stabilization_checkbox.get_status()[0])
+        return self._checkbox_enabled(0)
 
     def _face_view_enabled(self) -> bool:
         """Return whether the front-view rendering mode is enabled."""
 
-        return bool(self.stabilization_checkbox.get_status()[1])
+        return self._checkbox_enabled(1)
 
     def _inward_tilt_optimization_enabled(self) -> bool:
         """Return whether inward tilt should be optimized to maximize twist."""
 
-        return bool(self.stabilization_checkbox.get_status()[self.TWIST_OPTIMIZATION_INDEX])
+        return self._checkbox_enabled(self.TWIST_OPTIMIZATION_INDEX)
 
     def _alignment_optimization_enabled(self) -> bool:
         """Return whether inward tilt should be optimized to align the body with `H`."""
 
-        return bool(self.stabilization_checkbox.get_status()[self.ALIGNMENT_OPTIMIZATION_INDEX])
+        return self._checkbox_enabled(self.ALIGNMENT_OPTIMIZATION_INDEX)
+
+    def _checkbox_enabled(self, index: int) -> bool:
+        """Safely read one checkbox state even if Matplotlib reports a short status list."""
+
+        status = list(self.stabilization_checkbox.get_status())
+        return bool(status[index]) if index < len(status) else False
 
     def _apply_view_mode(self) -> None:
         """Apply the current 3D camera configuration."""
