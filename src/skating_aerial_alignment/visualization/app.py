@@ -471,14 +471,20 @@ class SkatingAerialAlignmentApp:
                 spine.set_linewidth(1.15)
             title_artist = panel.text(
                 0.03,
-                0.90,
+                0.93 if name == "time" else 0.90,
                 title,
-                fontsize=11.2,
+                fontsize=10.9 if name == "time" else 11.2,
                 fontweight="bold",
                 color=self.TEXT_PRIMARY,
                 va="top",
             )
-            panel.axhline(0.82, xmin=0.03, xmax=0.97, color="#EEF2F6", linewidth=1.0)
+            panel.axhline(
+                0.64 if name == "time" else 0.82,
+                xmin=0.03,
+                xmax=0.97,
+                color="#EEF2F6",
+                linewidth=1.0,
+            )
             self.control_panels[name] = panel
             self.control_section_titles.append(title_artist)
 
@@ -566,7 +572,7 @@ class SkatingAerialAlignmentApp:
         )
         self.reset_button.on_clicked(self._reset_controls)
 
-        pause_axis = self.figure.add_axes([0.065, 0.266, 0.080, 0.042])
+        pause_axis = self.figure.add_axes([0.060, 0.255, 0.068, 0.032])
         self.pause_button = Button(pause_axis, "Pause")
         self._style_button(
             self.pause_button,
@@ -576,7 +582,7 @@ class SkatingAerialAlignmentApp:
         )
         self.pause_button.on_clicked(self._toggle_pause)
 
-        speed_button_axis = self.figure.add_axes([0.154, 0.266, 0.094, 0.042])
+        speed_button_axis = self.figure.add_axes([0.136, 0.255, 0.088, 0.032])
         self.speed_button = Button(speed_button_axis, "Vit. 100%")
         self._style_button(self.speed_button, fill="#FFFFFF", edge="#B9C5D3")
         self.speed_button.on_clicked(self._toggle_playback_menu)
@@ -598,7 +604,7 @@ class SkatingAerialAlignmentApp:
         self._style_checkboxes(self.stabilization_checkbox)
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
-        playback_axis = self.figure.add_axes([0.154, 0.202, 0.094, 0.060])
+        playback_axis = self.figure.add_axes([0.136, 0.189, 0.088, 0.055])
         self.playback_selector = SafeRadioButtons(
             playback_axis,
             labels=("100%", "50%", "25%"),
@@ -615,7 +621,7 @@ class SkatingAerialAlignmentApp:
             child.set_visible(False)
         self.playback_menu_axis = playback_axis
 
-        time_axis = self.figure.add_axes([0.265, 0.276, 0.305, 0.0105])
+        time_axis = self.figure.add_axes([0.248, 0.258, 0.335, 0.0095])
         self.time_slider = Slider(
             time_axis,
             label="Temps (s)",

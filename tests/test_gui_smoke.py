@@ -53,9 +53,11 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.time_slider.valmin == 0.0
         assert app.time_slider.valmax == pytest.approx(app.result.flight_time)
         assert 0.010 < app.sliders["salto_rps"].ax.get_position().height < 0.012
-        assert 0.010 < app.time_slider.ax.get_position().height < 0.012
+        assert 0.009 < app.time_slider.ax.get_position().height < 0.011
         assert app.control_panels["momentum"].get_position().height > 0.20
         assert app.control_panels["time"].get_position().x1 < 0.62
+        assert app.pause_button.ax.get_position().height < 0.035
+        assert app.time_slider.ax.get_position().width < 0.34
         assert app.ax_rotation.get_position().x1 < 0.94
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
