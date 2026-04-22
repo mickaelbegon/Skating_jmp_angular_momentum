@@ -9,6 +9,7 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors as mcolors
 from matplotlib.animation import FuncAnimation
 from matplotlib.widgets import Button, CheckButtons, RadioButtons, Slider
 
@@ -41,6 +42,18 @@ class SafeCheckButtons(CheckButtons):
                     (((event.x, event.y) - coords[candidate_indices]) ** 2).sum(-1).argmin()
                 ]
             )
+
+    def set_active(self, index, state=None):
+        """Toggle one checkbox while keeping edge and face colors synchronized."""
+
+        super().set_active(index, state)
+        invisible = mcolors.to_rgba("none")
+        facecolors = self._checks.get_facecolor()
+        edgecolors = np.asarray(facecolors).copy()
+        for color_index, color in enumerate(facecolors):
+            if mcolors.same_color(color, invisible):
+                edgecolors[color_index] = invisible
+        self._checks.set_edgecolor(edgecolors)
 
 
 class SafeRadioButtons(RadioButtons):
@@ -103,12 +116,12 @@ def format_status_text(
     controller_label = "PD actif" if parameters.stabilize_trunk else "tronc passif"
     backward_distance = abs(parameters.backward_horizontal_velocity) * result.flight_time
     return (
-        f"Temps de vol ~ {result.flight_time:.3f} s | "
+        f"Tvol {result.flight_time:.3f} s | "
         f"Vz = {parameters.takeoff_vertical_velocity:.2f} m/s | "
         f"V_arr = {abs(parameters.backward_horizontal_velocity):.2f} m/s | "
-        f"Arriere = {backward_distance:.2f} m | "
-        f"Angle initial = {result.initial_body_axis_alignment_deg:.1f} deg | "
-        f"H_global = [{result.equivalent_angular_momentum[0]:.2f}, "
+        f"Arr. = {backward_distance:.2f} m | "
+        f"Align. init. = {result.initial_body_axis_alignment_deg:.1f} deg | "
+        f"H = [{result.equivalent_angular_momentum[0]:.2f}, "
         f"{result.equivalent_angular_momentum[1]:.2f}, "
         f"{result.equivalent_angular_momentum[2]:.2f}] Nms | "
         f"{controller_label}"
@@ -130,18 +143,18 @@ def format_inertia_and_controller_text(
     optimization_text = "PD manuel"
     if optimization_result is not None:
         optimization_text = (
-            f"PD auto J={optimization_result.objective_value:.3e} "
+            f"PD auto J={optimization_result.objective_value:.2e} "
             f"({optimization_result.evaluations} eval.)"
         )
     tilt_optimization_text = "incl. int. manuelle"
     if alignment_optimization_result is not None:
         tilt_optimization_text = (
-            f"align. auto = {alignment_optimization_result.inward_tilt_deg:.1f} deg "
-            f"(angle moy. {alignment_optimization_result.mean_alignment_deg:.2f} deg)"
+            f"align. auto {alignment_optimization_result.inward_tilt_deg:.1f} deg "
+            f"(moy. {alignment_optimization_result.mean_alignment_deg:.2f} deg)"
         )
     elif inward_tilt_optimization_result is not None:
         tilt_optimization_text = (
-            f"incl. int. auto = {inward_tilt_optimization_result.inward_tilt_deg:.1f} deg "
+            f"incl. int. auto {inward_tilt_optimization_result.inward_tilt_deg:.1f} deg "
             f"({inward_tilt_optimization_result.twist_turns:.2f} tours)"
         )
     inertia_text = (
