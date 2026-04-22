@@ -179,7 +179,7 @@ class SkatingAerialAlignmentApp:
     DEFAULT_BACKWARD_VELOCITY_M_S = 2.0
     TWIST_OPTIMIZATION_INDEX = 2
     ALIGNMENT_OPTIMIZATION_INDEX = 3
-    TWIST_OPTIMIZATION_LABEL = "Optimiser incl. interieure"
+    TWIST_OPTIMIZATION_LABEL = "Optimiser incl. int."
     ALIGNMENT_OPTIMIZATION_LABEL = "Optimiser alignement"
     PRIMARY_BLUE = "#2E6FBB"
     PANEL_BACKGROUND = "#FFFFFF"
@@ -219,33 +219,33 @@ class SkatingAerialAlignmentApp:
         self._updating_inward_tilt_slider = False
         self._updating_checkbox_state = False
         self.playback_menu_visible = False
+        self.playback_text_artist = None
 
         self.figure = plt.figure(figsize=(16, 11), facecolor=self.FIGURE_BACKGROUND)
         self.figure.suptitle(
             "Phase aerienne d'un saut en patinage: alignement moment cinetique / axe du corps",
-            fontsize=18,
+            fontsize=16.5,
             fontweight="semibold",
             color=self.TEXT_PRIMARY,
-            y=0.976,
+            y=0.972,
         )
         self.status_text_artist = self.figure.text(
-            0.05,
-            0.945,
+            0.038,
+            0.936,
             format_status_text(self.parameters, self.result, self.simulator),
-            fontsize=10.2,
+            fontsize=9.4,
             color=self.TEXT_PRIMARY,
             va="center",
-            wrap=True,
             bbox={
-                "boxstyle": "round,pad=0.28",
+                "boxstyle": "round,pad=0.20",
                 "facecolor": self.PANEL_BACKGROUND,
                 "edgecolor": self.PANEL_BORDER,
-                "linewidth": 0.9,
+                "linewidth": 0.85,
             },
         )
         self.details_text_artist = self.figure.text(
-            0.05,
-            0.915,
+            0.038,
+            0.904,
             format_inertia_and_controller_text(
                 self.parameters,
                 self.simulator,
@@ -253,24 +253,15 @@ class SkatingAerialAlignmentApp:
                 self.inward_tilt_optimization_result,
                 self.alignment_optimization_result,
             ),
-            fontsize=9.2,
+            fontsize=8.6,
             color=self.TEXT_SECONDARY,
             va="center",
-            wrap=True,
             bbox={
-                "boxstyle": "round,pad=0.26",
+                "boxstyle": "round,pad=0.18",
                 "facecolor": self.PANEL_BACKGROUND,
                 "edgecolor": self.PANEL_BORDER,
-                "linewidth": 0.9,
+                "linewidth": 0.85,
             },
-        )
-        self.playback_text_artist = self.figure.text(
-            0.955,
-            0.223,
-            "",
-            fontsize=9.1,
-            color=self.TEXT_SECONDARY,
-            ha="right",
         )
 
         self._build_axes()
@@ -372,7 +363,7 @@ class SkatingAerialAlignmentApp:
             2,
             left=0.045,
             right=0.928,
-            top=0.885,
+            top=0.84,
             bottom=0.345,
             hspace=0.42,
             wspace=0.24,
@@ -392,7 +383,7 @@ class SkatingAerialAlignmentApp:
         self.ax_rotation.set_title("Vrille et salto")
         self.ax_trunk.set_title("3 DoF du tronc")
         self.ax_torque.set_title("Efforts du tronc")
-        self.ax_inertia.set_title("Inertie apparente en vrille")
+        self.ax_inertia.set_title("Inertie app. en vrille")
 
         self.ax_alignment.set_ylabel("deg")
         self.ax_rotation.set_ylabel("Vrille (deg)")
@@ -400,7 +391,7 @@ class SkatingAerialAlignmentApp:
         self.ax_trunk.set_ylabel("deg")
         self.ax_torque.set_ylabel("N.m")
         self.ax_inertia.set_ylabel("kg.m^2")
-        self.ax_inertia_twist_speed.set_ylabel("omega_twist (deg/s)")
+        self.ax_inertia_twist_speed.set_ylabel("om. vrille (deg/s)")
         self.ax_inertia.set_xlabel("Temps (s)")
         for axis in (
             self.ax_alignment,
@@ -450,7 +441,7 @@ class SkatingAerialAlignmentApp:
         self.ax_rotation_salto.tick_params(axis="y", colors="#1F77B4")
         self.ax_inertia.set_ylabel("kg.m^2", color="#2CA02C")
         self.ax_inertia.tick_params(axis="y", colors="#2CA02C")
-        self.ax_inertia_twist_speed.set_ylabel("omega_twist (deg/s)", color="#8C564B", labelpad=8)
+        self.ax_inertia_twist_speed.set_ylabel("om. vrille (deg/s)", color="#8C564B", labelpad=8)
         self.ax_inertia_twist_speed.tick_params(axis="y", colors="#8C564B")
 
         self.ax_3d.set_facecolor(self.PANEL_BACKGROUND)
@@ -494,7 +485,16 @@ class SkatingAerialAlignmentApp:
         make_panel("momentum", [0.04, 0.03, 0.30, 0.21], "Moment cinetique global")
         make_panel("flight", [0.355, 0.03, 0.30, 0.21], "Vol et posture")
         make_panel("modes", [0.67, 0.03, 0.30, 0.21], "Modes et lecture")
-        make_panel("time", [0.04, 0.248, 0.93, 0.068], "Navigation temporelle")
+        make_panel("time", [0.04, 0.248, 0.57, 0.068], "Navigation temporelle")
+        self.playback_text_artist = self.control_panels["modes"].text(
+            0.97,
+            0.965,
+            "",
+            fontsize=8.9,
+            color=self.TEXT_SECONDARY,
+            ha="right",
+            va="top",
+        )
 
         slider_specs = [
             (
@@ -551,27 +551,12 @@ class SkatingAerialAlignmentApp:
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
 
-        retune_pd_axis = self.figure.add_axes([0.685, 0.157, 0.105, 0.042])
+        retune_pd_axis = self.figure.add_axes([0.685, 0.157, 0.110, 0.042])
         self.retune_pd_button = Button(retune_pd_axis, "Retuner PD")
         self._style_button(self.retune_pd_button, fill="#FFFFFF", edge="#B9C5D3")
         self.retune_pd_button.on_clicked(self._retune_pd_controller)
 
-        speed_button_axis = self.figure.add_axes([0.805, 0.157, 0.105, 0.042])
-        self.speed_button = Button(speed_button_axis, "Vitesse 100%")
-        self._style_button(self.speed_button, fill="#FFFFFF", edge="#B9C5D3")
-        self.speed_button.on_clicked(self._toggle_playback_menu)
-
-        pause_axis = self.figure.add_axes([0.685, 0.103, 0.105, 0.042])
-        self.pause_button = Button(pause_axis, "Pause")
-        self._style_button(
-            self.pause_button,
-            fill="#E8F1FF",
-            edge="#8CB5F4",
-            text_color="#184B94",
-        )
-        self.pause_button.on_clicked(self._toggle_pause)
-
-        reset_axis = self.figure.add_axes([0.805, 0.103, 0.105, 0.042])
+        reset_axis = self.figure.add_axes([0.815, 0.157, 0.110, 0.042])
         self.reset_button = Button(reset_axis, "Reset")
         self._style_button(
             self.reset_button,
@@ -581,7 +566,22 @@ class SkatingAerialAlignmentApp:
         )
         self.reset_button.on_clicked(self._reset_controls)
 
-        checkbox_axis = self.figure.add_axes([0.72, 0.050, 0.20, 0.052])
+        pause_axis = self.figure.add_axes([0.065, 0.266, 0.080, 0.042])
+        self.pause_button = Button(pause_axis, "Pause")
+        self._style_button(
+            self.pause_button,
+            fill="#E8F1FF",
+            edge="#8CB5F4",
+            text_color="#184B94",
+        )
+        self.pause_button.on_clicked(self._toggle_pause)
+
+        speed_button_axis = self.figure.add_axes([0.154, 0.266, 0.094, 0.042])
+        self.speed_button = Button(speed_button_axis, "Vit. 100%")
+        self._style_button(self.speed_button, fill="#FFFFFF", edge="#B9C5D3")
+        self.speed_button.on_clicked(self._toggle_playback_menu)
+
+        checkbox_axis = self.figure.add_axes([0.71, 0.055, 0.24, 0.088])
         checkbox_axis.set_facecolor("none")
         for spine in checkbox_axis.spines.values():
             spine.set_visible(False)
@@ -598,7 +598,7 @@ class SkatingAerialAlignmentApp:
         self._style_checkboxes(self.stabilization_checkbox)
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
 
-        playback_axis = self.figure.add_axes([0.805, 0.205, 0.105, 0.060])
+        playback_axis = self.figure.add_axes([0.154, 0.202, 0.094, 0.060])
         self.playback_selector = SafeRadioButtons(
             playback_axis,
             labels=("100%", "50%", "25%"),
@@ -615,7 +615,7 @@ class SkatingAerialAlignmentApp:
             child.set_visible(False)
         self.playback_menu_axis = playback_axis
 
-        time_axis = self.figure.add_axes([0.105, 0.276, 0.835, 0.0105])
+        time_axis = self.figure.add_axes([0.265, 0.276, 0.305, 0.0105])
         self.time_slider = Slider(
             time_axis,
             label="Temps (s)",
@@ -676,17 +676,28 @@ class SkatingAerialAlignmentApp:
 
         item_count = len(checkbox.labels)
         for label in checkbox.labels:
-            label.set_fontsize(9.2)
+            label.set_fontsize(8.7)
             label.set_color(self.TEXT_PRIMARY)
+            label.set_x(0.29)
         if hasattr(checkbox, "_frames"):
-            checkbox._frames.set_sizes(np.full(item_count, 58.0))
+            checkbox._frames.set_sizes(np.full(item_count, 54.0))
             checkbox._frames.set_facecolors(np.tile([[1.0, 1.0, 1.0, 1.0]], (item_count, 1)))
             checkbox._frames.set_edgecolors(np.tile([[0.56, 0.63, 0.70, 1.0]], (item_count, 1)))
             checkbox._frames.set_linewidths(np.full(item_count, 1.0))
         if hasattr(checkbox, "_checks"):
-            checkbox._checks.set_sizes(np.full(item_count, 58.0))
-            checkbox._checks.set_edgecolors(np.tile([[0.18, 0.44, 0.73, 1.0]], (item_count, 1)))
-            checkbox._checks.set_linewidths(np.full(item_count, 1.2))
+            checkbox._checks.set_sizes(np.full(item_count, 60.0))
+            checkbox._active_check_colors = np.tile([[0.18, 0.44, 0.73, 1.0]], (item_count, 1))
+            current_status = list(checkbox.get_status())
+            invisible = mcolors.to_rgba("none")
+            facecolors = np.array(
+                [
+                    checkbox._active_check_colors[index] if current_status[index] else invisible
+                    for index in range(item_count)
+                ]
+            )
+            checkbox._checks.set_facecolor(facecolors)
+            checkbox._checks.set_edgecolor(facecolors)
+            checkbox._checks.set_linewidths(np.full(item_count, 1.4))
 
     def _style_radio_buttons(self, radio: SafeRadioButtons) -> None:
         """Style the playback-speed popup menu consistently with the control cards."""
@@ -787,7 +798,7 @@ class SkatingAerialAlignmentApp:
             [],
             color="#2CA02C",
             linewidth=2.6,
-            label="||H|| / |omega_vrille|",
+            label="I app.",
         )
         (self.twist_speed_line,) = self.ax_inertia_twist_speed.plot(
             [],
@@ -795,7 +806,7 @@ class SkatingAerialAlignmentApp:
             color="#8C564B",
             linewidth=2.0,
             linestyle="--",
-            label="omega_twist",
+            label="om. vrille",
         )
         inertia_handles = [self.twist_inertia_line, self.twist_speed_line]
         self.ax_inertia.legend(
@@ -1136,7 +1147,7 @@ class SkatingAerialAlignmentApp:
 
         speed_map = {"100%": 1.0, "50%": 0.5, "25%": 0.25}
         self.animation_speed_fraction = speed_map[label]
-        self.speed_button.label.set_text(f"Vitesse {label}")
+        self.speed_button.label.set_text(f"Vit. {label}")
         self._update_animation_playback()
         self._set_playback_menu_visible(False)
         self.figure.canvas.draw_idle()
@@ -1372,10 +1383,10 @@ class SkatingAerialAlignmentApp:
             animation_step_count * self.ANIMATION_TIMER_INTERVAL_MS / 1000.0
         )
         self.playback_text_artist.set_text(
-            "Lecture: "
+            "Lect. "
             f"{int(round(self.animation_speed_fraction * 100.0))}% "
-            f"| temps reel ~ {self.result.flight_time:.2f} s "
-            f"| anim ~ {self.animation_duration_seconds:.2f} s"
+            f"| reel {self.result.flight_time:.2f} s "
+            f"| anim {self.animation_duration_seconds:.2f} s"
         )
         if hasattr(self, "animation") and self.animation.event_source is not None:
             self.animation.event_source.interval = self.ANIMATION_TIMER_INTERVAL_MS

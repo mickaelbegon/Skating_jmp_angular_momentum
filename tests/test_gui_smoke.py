@@ -8,6 +8,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from matplotlib import colors as mcolors
 
 pytest.importorskip("biorbd")
 
@@ -43,7 +44,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_menu_visible is False
         assert app.playback_menu_axis.get_visible() is False
         assert app.retune_pd_button.label.get_text() == "Retuner PD"
-        assert app.speed_button.label.get_text() == "Vitesse 100%"
+        assert app.speed_button.label.get_text() == "Vit. 100%"
         assert len(app.control_section_titles) == 4
         assert app.control_section_titles[0].get_text() == "Moment cinetique global"
         assert len(app.stabilization_checkbox.get_status()) == 4
@@ -54,10 +55,11 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert 0.010 < app.sliders["salto_rps"].ax.get_position().height < 0.012
         assert 0.010 < app.time_slider.ax.get_position().height < 0.012
         assert app.control_panels["momentum"].get_position().height > 0.20
+        assert app.control_panels["time"].get_position().x1 < 0.62
         assert app.ax_rotation.get_position().x1 < 0.94
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
-        assert app.ax_inertia_twist_speed.get_ylabel() == "omega_twist (deg/s)"
+        assert app.ax_inertia_twist_speed.get_ylabel() == "om. vrille (deg/s)"
         assert app.twist_speed_line is not None
         assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
         assert mpl.rcParams["axes3d.mouserotationstyle"] == "azel"
@@ -157,6 +159,15 @@ def test_enabling_stabilization_does_not_auto_tune_pd_controller() -> None:
         assert app.parameters.stabilize_trunk is True
         assert app.optimization_result is None
         assert app.parameters.controller == initial_controller
+        assert not mcolors.same_color(
+            app.stabilization_checkbox._checks.get_facecolor()[0],
+            mcolors.to_rgba("none"),
+        )
+        app.stabilization_checkbox.set_active(0)
+        assert mcolors.same_color(
+            app.stabilization_checkbox._checks.get_facecolor()[0],
+            mcolors.to_rgba("none"),
+        )
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
