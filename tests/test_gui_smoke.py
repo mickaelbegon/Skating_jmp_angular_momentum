@@ -59,8 +59,10 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.ax_rotation.get_position().x1 < 0.94
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
-        assert app.ax_inertia_twist_speed.get_ylabel() == "om. vrille (deg/s)"
+        assert app.ax_inertia_twist_speed.get_ylabel() == "ω_vrille (deg/s)"
         assert app.twist_speed_line is not None
+        assert app.twist_speed_line.get_label() == "ω_vrille"
+        assert app.twist_inertia_line.get_label() == "||σ|| / |ω_vrille|"
         assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
         assert mpl.rcParams["axes3d.mouserotationstyle"] == "azel"
         assert app.ax_inertia.get_xlabel() == "Temps (s)"

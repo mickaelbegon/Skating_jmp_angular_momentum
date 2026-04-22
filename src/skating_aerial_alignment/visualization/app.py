@@ -391,7 +391,7 @@ class SkatingAerialAlignmentApp:
         self.ax_trunk.set_ylabel("deg")
         self.ax_torque.set_ylabel("N.m")
         self.ax_inertia.set_ylabel("kg.m^2")
-        self.ax_inertia_twist_speed.set_ylabel("om. vrille (deg/s)")
+        self.ax_inertia_twist_speed.set_ylabel("ω_vrille (deg/s)")
         self.ax_inertia.set_xlabel("Temps (s)")
         for axis in (
             self.ax_alignment,
@@ -441,7 +441,7 @@ class SkatingAerialAlignmentApp:
         self.ax_rotation_salto.tick_params(axis="y", colors="#1F77B4")
         self.ax_inertia.set_ylabel("kg.m^2", color="#2CA02C")
         self.ax_inertia.tick_params(axis="y", colors="#2CA02C")
-        self.ax_inertia_twist_speed.set_ylabel("om. vrille (deg/s)", color="#8C564B", labelpad=8)
+        self.ax_inertia_twist_speed.set_ylabel("ω_vrille (deg/s)", color="#8C564B", labelpad=8)
         self.ax_inertia_twist_speed.tick_params(axis="y", colors="#8C564B")
 
         self.ax_3d.set_facecolor(self.PANEL_BACKGROUND)
@@ -798,7 +798,7 @@ class SkatingAerialAlignmentApp:
             [],
             color="#2CA02C",
             linewidth=2.6,
-            label="I app.",
+            label="||σ|| / |ω_vrille|",
         )
         (self.twist_speed_line,) = self.ax_inertia_twist_speed.plot(
             [],
@@ -806,7 +806,7 @@ class SkatingAerialAlignmentApp:
             color="#8C564B",
             linewidth=2.0,
             linestyle="--",
-            label="om. vrille",
+            label="ω_vrille",
         )
         inertia_handles = [self.twist_inertia_line, self.twist_speed_line]
         self.ax_inertia.legend(
