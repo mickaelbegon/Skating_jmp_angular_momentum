@@ -45,6 +45,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_menu_axis.get_visible() is False
         assert app.retune_pd_button.label.get_text() == "Retuner PD"
         assert app.speed_button.label.get_text() == "Vit. 100%"
+        assert app.pause_button.label.get_text() == "||"
         assert len(app.control_section_titles) == 4
         assert app.control_section_titles[0].get_text() == "Moment cinetique global"
         assert len(app.stabilization_checkbox.get_status()) == 4
@@ -122,7 +123,7 @@ def test_time_slider_moves_to_the_requested_frame_and_pauses_animation() -> None
         app.time_slider.set_val(target_time)
 
         assert app.is_paused is True
-        assert app.pause_button.label.get_text() == "Play"
+        assert app.pause_button.label.get_text() == "▶"
         assert app.frame_index == target_frame
         assert app.time_slider.val == pytest.approx(target_time)
     finally:
@@ -138,13 +139,13 @@ def test_animation_rewinds_to_the_start_when_playback_reaches_the_end() -> None:
         app.frame_index = len(app.result.time) - 2
         app.frames_per_animation_step = 3
         app.is_paused = False
-        app.pause_button.label.set_text("Pause")
+        app.pause_button.label.set_text("||")
 
         app._animate(0)
 
         assert app.frame_index == 0
         assert app.is_paused is True
-        assert app.pause_button.label.get_text() == "Play"
+        assert app.pause_button.label.get_text() == "▶"
         assert app.time_slider.val == pytest.approx(0.0)
     finally:
         app.animation._draw_was_started = True

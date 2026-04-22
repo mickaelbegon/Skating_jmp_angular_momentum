@@ -572,8 +572,8 @@ class SkatingAerialAlignmentApp:
         )
         self.reset_button.on_clicked(self._reset_controls)
 
-        pause_axis = self.figure.add_axes([0.060, 0.255, 0.068, 0.032])
-        self.pause_button = Button(pause_axis, "Pause")
+        pause_axis = self.figure.add_axes([0.060, 0.255, 0.040, 0.032])
+        self.pause_button = Button(pause_axis, "||")
         self._style_button(
             self.pause_button,
             fill="#E8F1FF",
@@ -582,7 +582,7 @@ class SkatingAerialAlignmentApp:
         )
         self.pause_button.on_clicked(self._toggle_pause)
 
-        speed_button_axis = self.figure.add_axes([0.136, 0.255, 0.088, 0.032])
+        speed_button_axis = self.figure.add_axes([0.108, 0.255, 0.088, 0.032])
         self.speed_button = Button(speed_button_axis, "Vit. 100%")
         self._style_button(self.speed_button, fill="#FFFFFF", edge="#B9C5D3")
         self.speed_button.on_clicked(self._toggle_playback_menu)
@@ -676,6 +676,7 @@ class SkatingAerialAlignmentApp:
         button.hovercolor = "#EDF3FA"
         button.label.set_fontsize(10.0)
         button.label.set_color(text_color)
+        button.label.set_fontweight("semibold")
 
     def _style_checkboxes(self, checkbox: SafeCheckButtons) -> None:
         """Make the checkbox group more legible and less cramped."""
@@ -1105,7 +1106,7 @@ class SkatingAerialAlignmentApp:
         """Pause or resume the 3D animation."""
 
         self.is_paused = not self.is_paused
-        self.pause_button.label.set_text("Play" if self.is_paused else "Pause")
+        self._update_pause_button_label()
         self.figure.canvas.draw_idle()
 
     def _retune_pd_controller(self, _event) -> None:
@@ -1268,7 +1269,7 @@ class SkatingAerialAlignmentApp:
             last_frame_index = max(len(self.result.time) - 1, 0)
             if self.frame_index >= last_frame_index:
                 self.is_paused = True
-                self.pause_button.label.set_text("Play")
+                self._update_pause_button_label()
                 self.figure.canvas.draw_idle()
                 return []
 
@@ -1279,7 +1280,7 @@ class SkatingAerialAlignmentApp:
             self._draw_frame(self.frame_index)
             if self.frame_index >= last_frame_index:
                 self.is_paused = True
-                self.pause_button.label.set_text("Play")
+                self._update_pause_button_label()
                 self.frame_index = 0
                 self._draw_frame(self.frame_index)
             self.figure.canvas.draw_idle()
@@ -1300,10 +1301,15 @@ class SkatingAerialAlignmentApp:
         if self._updating_time_slider:
             return
         self.is_paused = True
-        self.pause_button.label.set_text("Play")
+        self._update_pause_button_label()
         self.frame_index = int(np.argmin(np.abs(self.result.time - float(value))))
         self._draw_frame(self.frame_index)
         self.figure.canvas.draw_idle()
+
+    def _update_pause_button_label(self) -> None:
+        """Reflect the playback state with a compact symbol button."""
+
+        self.pause_button.label.set_text("▶" if self.is_paused else "||")
 
     def _display_kinematics(self, frame_index: int) -> tuple[np.ndarray, np.ndarray]:
         """Return the marker cloud and longitudinal axis used for display."""
