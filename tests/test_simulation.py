@@ -67,11 +67,28 @@ def test_angular_momentum_components_are_defined_in_the_global_frame() -> None:
     requested_rps = (0.2, -0.1, 0.5)
 
     angular_momentum = simulator.angular_momentum_from_rps(requested_rps, q0)
-    reconstructed = simulator.whole_body_inertia_tensor(q0) @ (
+    reconstructed = np.diag(simulator.whole_body_inertia_tensor(q0)) * (
         2.0 * np.pi * np.asarray(requested_rps, dtype=float)
     )
 
     assert np.allclose(angular_momentum, reconstructed)
+
+
+def test_single_axis_momentum_request_stays_on_that_global_axis() -> None:
+    """Requesting only one global momentum component does not create cross components."""
+
+    simulator = SkaterFlightSimulator()
+    q0 = simulator.initial_generalized_coordinates(
+        FlightSimulationParameters(
+            somersault_tilt_deg=12.0,
+            inward_tilt_deg=9.0,
+        )
+    )
+
+    angular_momentum = simulator.angular_momentum_from_rps((0.0, 0.0, 3.0), q0)
+
+    assert angular_momentum[:2] == pytest.approx(np.zeros(2), abs=1e-12)
+    assert angular_momentum[2] > 0.0
 
 
 def test_backward_horizontal_velocity_sets_the_center_of_mass_speed() -> None:
@@ -116,6 +133,26 @@ def test_backward_center_of_mass_velocity_does_not_change_angular_momentum() -> 
 
     assert np.allclose(
         moving_result.angular_momentum, stationary_result.angular_momentum, atol=1e-8
+    )
+
+
+def test_backward_center_of_mass_velocity_does_not_change_initial_alignment() -> None:
+    """Changing horizontal CoM speed does not alter the initial H/body-axis angle."""
+
+    simulator = SkaterFlightSimulator()
+    base_parameters = FlightSimulationParameters(
+        angular_velocity_rps=(0.0, 0.0, 3.0),
+        takeoff_vertical_velocity=0.50,
+        somersault_tilt_deg=0.0,
+        inward_tilt_deg=10.0,
+        sample_count=11,
+    )
+
+    stationary_result = simulator.simulate(base_parameters)
+    moving_result = simulator.simulate(replace(base_parameters, backward_horizontal_velocity=2.0))
+
+    assert moving_result.initial_body_axis_alignment_deg == pytest.approx(
+        stationary_result.initial_body_axis_alignment_deg
     )
 
 

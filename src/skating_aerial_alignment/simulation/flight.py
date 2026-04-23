@@ -173,13 +173,20 @@ class SkaterFlightSimulator:
         angular_velocity_rps: tuple[float, float, float],
         q: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Convert rotations per second about the global axes into angular momentum."""
+        """Convert equivalent rotations/s into global angular-momentum components.
+
+        The GUI sliders define the requested components of the angular momentum vector
+        in the global frame. Each value is displayed as the spin rate that would
+        generate that component around the corresponding global axis, without letting
+        inertia products rotate the requested vector away from that axis.
+        """
 
         angular_velocity = 2.0 * np.pi * np.asarray(angular_velocity_rps, dtype=float)
         configuration = (
             np.asarray(q, dtype=float) if q is not None else np.zeros(self.model.nbQ(), dtype=float)
         )
-        return self.whole_body_inertia_tensor(configuration) @ angular_velocity
+        axis_moments = np.diag(self.whole_body_inertia_tensor(configuration))
+        return axis_moments * angular_velocity
 
     def controller_torques(
         self,
