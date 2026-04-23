@@ -121,7 +121,7 @@ def format_status_text(
         f"V_arr = {abs(parameters.backward_horizontal_velocity):.2f} m/s | "
         f"Arr. = {backward_distance:.2f} m | "
         f"Align. init. = {result.initial_body_axis_alignment_deg:.1f} deg | "
-        f"H = [{result.equivalent_angular_momentum[0]:.2f}, "
+        f"σ = [{result.equivalent_angular_momentum[0]:.2f}, "
         f"{result.equivalent_angular_momentum[1]:.2f}, "
         f"{result.equivalent_angular_momentum[2]:.2f}] Nms | "
         f"{controller_label}"
@@ -187,6 +187,7 @@ class SkatingAerialAlignmentApp:
     FIGURE_BACKGROUND = "#F3F6F9"
     TEXT_PRIMARY = "#14212B"
     TEXT_SECONDARY = "#475467"
+    DISPLAY_INTERVAL_ESTIMATE_MS = 33.0
 
     def __init__(self, pd_cache_path: str | Path | None = None) -> None:
         """Create the figure, controls, and initial simulation."""
@@ -488,7 +489,7 @@ class SkatingAerialAlignmentApp:
             self.control_panels[name] = panel
             self.control_section_titles.append(title_artist)
 
-        make_panel("momentum", [0.04, 0.03, 0.30, 0.21], "Moment cinetique global")
+        make_panel("momentum", [0.04, 0.03, 0.30, 0.21], "Moment cinetique σ")
         make_panel("flight", [0.355, 0.03, 0.30, 0.21], "Vol et posture")
         make_panel("modes", [0.67, 0.03, 0.30, 0.21], "Modes et lecture")
         make_panel("time", [0.04, 0.248, 0.57, 0.068], "Navigation temporelle")
@@ -506,13 +507,13 @@ class SkatingAerialAlignmentApp:
             (
                 "salto_rps",
                 [0.095, 0.185, 0.205, 0.0105],
-                "Hx eq. (rot/s)",
+                "σx eq. (rot/s)",
                 0.0,
                 0.25,
                 0.0,
             ),
-            ("tilt_rps", [0.095, 0.136, 0.205, 0.0105], "Hy eq. (rot/s)", -2.0, 2.0, 0.0),
-            ("twist_rps", [0.095, 0.087, 0.205, 0.0105], "Hz eq. (rot/s)", -4.0, 6.0, 3.0),
+            ("tilt_rps", [0.095, 0.136, 0.205, 0.0105], "σy eq. (rot/s)", -2.0, 2.0, 0.0),
+            ("twist_rps", [0.095, 0.087, 0.205, 0.0105], "σz eq. (rot/s)", -4.0, 6.0, 3.0),
             (
                 "backward_velocity",
                 [0.425, 0.185, 0.185, 0.0105],
@@ -1067,13 +1068,24 @@ class SkatingAerialAlignmentApp:
         )
         self.twist_speed_line.set_data(time, np.rad2deg(self.result.twist_rotation_speed))
 
+        twist_total_deg = abs(np.rad2deg(self.result.twist_angle[-1] - self.result.twist_angle[0]))
+        twist_total_turns = self.simulator.twist_accumulation_turns(self.result)
+        salto_deg = np.rad2deg(self.result.q[:, 3])
+        salto_min_deg = float(np.min(salto_deg))
+        salto_max_deg = float(np.max(salto_deg))
+        self.ax_3d.set_title(f"Animation 3D ({twist_total_turns:.2f} tours)")
+        self.ax_rotation.set_title(
+            f"Vrilles ({twist_total_deg:.0f}°) et Salto "
+            f"[{salto_min_deg:+.0f}, {salto_max_deg:+.0f}]°"
+        )
+
         self._autoscale_axis(self.ax_alignment, time, [self.result.body_axis_alignment_deg])
         self._autoscale_axis(
             self.ax_rotation,
             time,
             [np.rad2deg(self.result.twist_angle)],
         )
-        self._autoscale_axis(self.ax_rotation_salto, time, [np.rad2deg(self.result.q[:, 3])])
+        self._autoscale_axis(self.ax_rotation_salto, time, [salto_deg])
         self._autoscale_axis(self.ax_trunk, time, [column for column in trunk_angles_deg.T])
         self._autoscale_axis(self.ax_torque, time, [column for column in trunk_torques.T])
         self._autoscale_axis(
@@ -1391,14 +1403,16 @@ class SkatingAerialAlignmentApp:
             if total_frame_advances > 0
             else 0
         )
-        self.animation_duration_seconds = (
-            animation_step_count * self.ANIMATION_TIMER_INTERVAL_MS / 1000.0
+        displayed_step_interval_ms = max(
+            self.ANIMATION_TIMER_INTERVAL_MS,
+            self.DISPLAY_INTERVAL_ESTIMATE_MS,
         )
+        self.animation_duration_seconds = animation_step_count * displayed_step_interval_ms / 1000.0
         self.playback_text_artist.set_text(
             "Lect. "
             f"{int(round(self.animation_speed_fraction * 100.0))}% "
             f"| reel {self.result.flight_time:.2f} s "
-            f"| anim {self.animation_duration_seconds:.2f} s"
+            f"| lecture {self.animation_duration_seconds:.2f} s"
         )
         if hasattr(self, "animation") and self.animation.event_source is not None:
             self.animation.event_source.interval = self.ANIMATION_TIMER_INTERVAL_MS

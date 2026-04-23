@@ -47,7 +47,10 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.speed_button.label.get_text() == "Vit. 100%"
         assert app.pause_button.label.get_text() == "||"
         assert len(app.control_section_titles) == 4
-        assert app.control_section_titles[0].get_text() == "Moment cinetique global"
+        assert app.control_section_titles[0].get_text() == "Moment cinetique σ"
+        assert app.sliders["salto_rps"].label.get_text() == "σx eq. (rot/s)"
+        assert app.sliders["tilt_rps"].label.get_text() == "σy eq. (rot/s)"
+        assert app.sliders["twist_rps"].label.get_text() == "σz eq. (rot/s)"
         assert len(app.stabilization_checkbox.get_status()) == 4
         assert app._inward_tilt_optimization_enabled() is False
         assert app._alignment_optimization_enabled() is False
@@ -66,12 +69,16 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.twist_speed_line is not None
         assert app.twist_speed_line.get_label() == "ω_vrille"
         assert app.twist_inertia_line.get_label() == "||σ|| / |ω_vrille|"
+        assert "tours" in app.ax_3d.get_title()
+        assert "Vrilles (" in app.ax_rotation.get_title()
+        assert "Salto [" in app.ax_rotation.get_title()
         assert app.ax_3d._axis_names[app.ax_3d._vertical_axis] == "z"
         assert mpl.rcParams["axes3d.mouserotationstyle"] == "azel"
         assert app.ax_inertia.get_xlabel() == "Temps (s)"
         assert app.figure.get_facecolor()[:3] == pytest.approx((0.9529, 0.9647, 0.9765), abs=1e-3)
         assert app.status_text_artist.get_bbox_patch() is not None
         assert app.details_text_artist.get_bbox_patch() is not None
+        assert "lecture " in app.playback_text_artist.get_text()
         app.figure.canvas.draw()
         panel_by_slider = {
             "salto_rps": "momentum",

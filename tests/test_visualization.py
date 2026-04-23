@@ -57,7 +57,7 @@ def test_status_text_mentions_flight_time_velocity_and_controller_state() -> Non
     assert "Arr." in text
     assert "0.40 m/s" in text
     assert "Align. init." in text
-    assert "H =" in text
+    assert "σ =" in text
     assert "PD actif" in text
 
 
