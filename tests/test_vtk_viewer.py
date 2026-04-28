@@ -8,8 +8,11 @@ import pytest
 pytest.importorskip("biorbd")
 pytest.importorskip("vtk")
 
-from skating_aerial_alignment.simulation import FlightSimulationParameters, SkaterFlightSimulator
-from skating_aerial_alignment.visualization import VtkAvatarScene, VtkSkaterAnimator
+from skating_aerial_alignment.simulation import (  # noqa: E402
+    FlightSimulationParameters,
+    SkaterFlightSimulator,
+)
+from skating_aerial_alignment.visualization import VtkAvatarScene, VtkSkaterAnimator  # noqa: E402
 
 
 def test_vtk_avatar_scene_builds_expected_actor_groups() -> None:
