@@ -9,6 +9,7 @@ L'application fournit :
 - un modèle multicorps `biorbd` simplifié du patineur,
 - une simulation de vol sans gravité pour la dynamique rotationnelle,
 - une GUI `matplotlib` avec sliders, animation 3D et courbes temporelles,
+- un viewer VTK dédié à l'animation 3D temps réel,
 - des tests unitaires et une CI GitHub Actions.
 
 ## Etat actuel du projet
@@ -39,6 +40,7 @@ Le prototype permet déjà de :
 
 - Python `>= 3.11`
 - `numpy`, `scipy`, `matplotlib`
+- `vtk` pour le viewer 3D dédié
 - `biorbd` pour la simulation et la GUI
 
 Le projet déclare les dépendances Python standards dans
@@ -79,6 +81,20 @@ cd /Users/mickaelbegon/Documents/Skating_jmp
 PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment
 ```
 
+Viewer 3D VTK dédié :
+
+```bash
+cd /Users/mickaelbegon/Documents/Skating_jmp
+PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python skating_aerial_alignment_vtk.py
+```
+
+Alternative via le module VTK :
+
+```bash
+cd /Users/mickaelbegon/Documents/Skating_jmp
+PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment.visualization.vtk_viewer
+```
+
 ## Utilisation rapide
 
 Dans la GUI :
@@ -94,6 +110,14 @@ Dans la GUI :
   la vrille ;
 - `Pause`, `Reset` et le slider temporel permettent de naviguer dans le vol ;
 - `Vitesse 100% / 50% / 25%` ajuste la vitesse de lecture.
+
+Dans le viewer VTK :
+
+- `Espace` lance ou met en pause la lecture ;
+- `←` et `→` avancent image par image ;
+- `R` revient au début ;
+- `F` active/désactive la vue de face `vrille = 0` ;
+- `1`, `2`, `4` passent respectivement la lecture à `100%`, `50%`, `25%`.
 
 Les figures montrent notamment :
 
@@ -132,6 +156,8 @@ La CI est définie dans
   : simulation du vol, observables et optimisations simples
 - [src/skating_aerial_alignment/visualization/app.py](/Users/mickaelbegon/Documents/Skating_jmp/src/skating_aerial_alignment/visualization/app.py)
   : interface graphique `matplotlib`
+- [src/skating_aerial_alignment/visualization/vtk_viewer.py](/Users/mickaelbegon/Documents/Skating_jmp/src/skating_aerial_alignment/visualization/vtk_viewer.py)
+  : viewer VTK dédié à l'animation 3D
 - [tests](/Users/mickaelbegon/Documents/Skating_jmp/tests)
   : tests unitaires et smoke tests GUI
 
