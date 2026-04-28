@@ -283,6 +283,7 @@ class SkatingAerialAlignmentApp:
     AVATAR_BOOT_COLOR = "#465A69"
     AVATAR_SKIN_COLOR = "#E8C3A4"
     AVATAR_ACCENT_COLOR = "#9BB5CC"
+    AVATAR_BLADE_COLOR = "#C7D4E2"
 
     def __init__(self, pd_cache_path: str | Path | None = None) -> None:
         """Create the figure, controls, and initial simulation."""
@@ -1380,6 +1381,32 @@ class SkatingAerialAlignmentApp:
                 )
             )
 
+        for side in ("left", "right"):
+            ankle = markers[self.simulator.marker_index[f"ankle_{side}"]]
+            toe = markers[self.simulator.marker_index[f"toe_{side}"]]
+            foot_axis = _normalized(toe - ankle)
+            blade_start = ankle - np.array([0.0, 0.0, 0.022], dtype=float) - 0.03 * foot_axis
+            blade_end = toe - np.array([0.0, 0.0, 0.022], dtype=float) + 0.06 * foot_axis
+            x, y, z = _tube_surface(
+                blade_start,
+                blade_end,
+                0.010,
+                radial_resolution=14,
+                axial_resolution=7,
+            )
+            self.avatar_surfaces.append(
+                self.ax_3d.plot_surface(
+                    x,
+                    y,
+                    z,
+                    color=self.AVATAR_BLADE_COLOR,
+                    linewidth=0.0,
+                    antialiased=False,
+                    shade=True,
+                    alpha=0.95,
+                )
+            )
+
         ellipsoids = [
             (
                 0.55 * markers[self.simulator.marker_index["pelvis_origin"]]
@@ -1403,6 +1430,34 @@ class SkatingAerialAlignmentApp:
                 (0.088, 0.092, 0.115),
                 markers[self.simulator.marker_index["head_top"]]
                 - markers[self.simulator.marker_index["thorax_top"]],
+                self.AVATAR_SKIN_COLOR,
+            ),
+            (
+                markers[self.simulator.marker_index["shoulder_left"]],
+                (0.050, 0.048, 0.052),
+                markers[self.simulator.marker_index["elbow_left"]]
+                - markers[self.simulator.marker_index["shoulder_left"]],
+                self.AVATAR_ACCENT_COLOR,
+            ),
+            (
+                markers[self.simulator.marker_index["shoulder_right"]],
+                (0.050, 0.048, 0.052),
+                markers[self.simulator.marker_index["elbow_right"]]
+                - markers[self.simulator.marker_index["shoulder_right"]],
+                self.AVATAR_ACCENT_COLOR,
+            ),
+            (
+                markers[self.simulator.marker_index["hand_left"]],
+                (0.030, 0.024, 0.035),
+                markers[self.simulator.marker_index["hand_left"]]
+                - markers[self.simulator.marker_index["wrist_left"]],
+                self.AVATAR_SKIN_COLOR,
+            ),
+            (
+                markers[self.simulator.marker_index["hand_right"]],
+                (0.030, 0.024, 0.035),
+                markers[self.simulator.marker_index["hand_right"]]
+                - markers[self.simulator.marker_index["wrist_right"]],
                 self.AVATAR_SKIN_COLOR,
             ),
         ]

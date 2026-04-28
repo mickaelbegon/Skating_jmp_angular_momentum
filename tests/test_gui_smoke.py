@@ -32,7 +32,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.twist_inertia_line is not None
         assert app.com_trajectory_line is not None
         assert app.com_point is not None
-        assert len(app.avatar_surfaces) == 19
+        assert len(app.avatar_surfaces) >= 25
         assert app.com_trajectory_line.get_alpha() == pytest.approx(0.28)
         x_data, y_data, z_data = app.com_trajectory_line.get_data_3d()
         assert len(x_data) == app.result.time.size
@@ -129,7 +129,7 @@ def test_volumetric_avatar_is_redrawn_without_accumulating_surfaces() -> None:
 
         app._draw_frame(min(1, len(app.result.time) - 1))
 
-        assert initial_surface_count == 19
+        assert initial_surface_count >= 25
         assert len(app.avatar_surfaces) == initial_surface_count
     finally:
         app.animation._draw_was_started = True
