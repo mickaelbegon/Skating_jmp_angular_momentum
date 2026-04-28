@@ -28,9 +28,13 @@ test = [
     "isort>=5.13",
     "flake8>=7.0",
 ]
+animation3d = [
+    "vtk>=9.3",
+]
 
 [project.scripts]
 skating-aerial-alignment = "skating_aerial_alignment.__main__:main"
+skating-aerial-alignment-vtk = "skating_aerial_alignment.visualization.vtk_viewer:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
