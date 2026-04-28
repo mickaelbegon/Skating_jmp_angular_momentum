@@ -106,6 +106,96 @@ def skeleton_connections() -> list[tuple[str, str]]:
     ]
 
 
+def _normalized(vector: np.ndarray) -> np.ndarray:
+    """Return a normalized vector, preserving zero vectors."""
+
+    norm = float(np.linalg.norm(vector))
+    if np.isclose(norm, 0.0):
+        return np.zeros(3, dtype=float)
+    return np.asarray(vector, dtype=float) / norm
+
+
+def _orthonormal_basis(direction: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Build an orthonormal basis whose third axis matches `direction`."""
+
+    axis = _normalized(direction)
+    if np.allclose(axis, 0.0):
+        axis = np.array([0.0, 0.0, 1.0], dtype=float)
+    reference = np.array([0.0, 0.0, 1.0], dtype=float)
+    if abs(float(np.dot(axis, reference))) > 0.9:
+        reference = np.array([1.0, 0.0, 0.0], dtype=float)
+    basis_x = _normalized(np.cross(axis, reference))
+    basis_y = _normalized(np.cross(axis, basis_x))
+    return basis_x, basis_y, axis
+
+
+def _tube_surface(
+    start: np.ndarray,
+    end: np.ndarray,
+    radius: float,
+    *,
+    radial_resolution: int = 18,
+    axial_resolution: int = 9,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return a softly tapered tube surface between two 3D points."""
+
+    start = np.asarray(start, dtype=float)
+    end = np.asarray(end, dtype=float)
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if np.isclose(length, 0.0):
+        return _ellipsoid_surface(
+            center=start,
+            radii=(radius, radius, radius),
+            direction=np.array([0.0, 0.0, 1.0], dtype=float),
+            radial_resolution=radial_resolution,
+            axial_resolution=axial_resolution,
+        )
+
+    basis_x, basis_y, axis = _orthonormal_basis(direction)
+    axial_coordinates = np.linspace(0.0, 1.0, axial_resolution)
+    theta = np.linspace(0.0, 2.0 * np.pi, radial_resolution)
+    axial_profile = np.minimum(axial_coordinates, 1.0 - axial_coordinates) / 0.24
+    taper = np.sin(0.5 * np.pi * np.clip(axial_profile, 0.0, 1.0))
+    radii = radius * (0.35 + 0.65 * taper)
+    centers = start[None, :] + axial_coordinates[:, None] * direction[None, :]
+    cos_theta = np.cos(theta)[None, :]
+    sin_theta = np.sin(theta)[None, :]
+    offset = radii[:, None, None] * (
+        cos_theta[:, :, None] * basis_x[None, None, :]
+        + sin_theta[:, :, None] * basis_y[None, None, :]
+    )
+    points = centers[:, None, :] + offset
+    return points[:, :, 0], points[:, :, 1], points[:, :, 2]
+
+
+def _ellipsoid_surface(
+    center: np.ndarray,
+    radii: tuple[float, float, float],
+    direction: np.ndarray,
+    *,
+    radial_resolution: int = 18,
+    axial_resolution: int = 12,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return an oriented ellipsoid surface."""
+
+    center = np.asarray(center, dtype=float)
+    basis_x, basis_y, axis = _orthonormal_basis(direction)
+    u = np.linspace(0.0, 2.0 * np.pi, radial_resolution)
+    v = np.linspace(0.0, np.pi, axial_resolution)
+    cos_u = np.cos(u)[None, :]
+    sin_u = np.sin(u)[None, :]
+    sin_v = np.sin(v)[:, None]
+    cos_v = np.cos(v)[:, None]
+    local = (
+        radii[0] * sin_v[:, :, None] * cos_u[:, :, None] * basis_x[None, None, :]
+        + radii[1] * sin_v[:, :, None] * sin_u[:, :, None] * basis_y[None, None, :]
+        + radii[2] * cos_v[:, :, None] * axis[None, None, :]
+    )
+    points = center[None, None, :] + local
+    return points[:, :, 0], points[:, :, 1], points[:, :, 2]
+
+
 def format_status_text(
     parameters: FlightSimulationParameters,
     result: FlightSimulationResult,
@@ -188,6 +278,11 @@ class SkatingAerialAlignmentApp:
     TEXT_PRIMARY = "#14212B"
     TEXT_SECONDARY = "#475467"
     DISPLAY_INTERVAL_ESTIMATE_MS = 33.0
+    AVATAR_SUIT_COLOR = "#325D88"
+    AVATAR_SUIT_SHADOW = "#1F3E5A"
+    AVATAR_BOOT_COLOR = "#465A69"
+    AVATAR_SKIN_COLOR = "#E8C3A4"
+    AVATAR_ACCENT_COLOR = "#9BB5CC"
 
     def __init__(self, pd_cache_path: str | Path | None = None) -> None:
         """Create the figure, controls, and initial simulation."""
@@ -723,9 +818,7 @@ class SkatingAerialAlignmentApp:
         """Initialize the lines that will be updated after each simulation."""
 
         self.skeleton_lines = []
-        for _connection in skeleton_connections():
-            (line,) = self.ax_3d.plot([], [], [], color="#0B3C5D", linewidth=2.0)
-            self.skeleton_lines.append(line)
+        self.avatar_surfaces = []
 
         self.ground_surface = None
         (self.body_axis_line,) = self.ax_3d.plot([], [], [], color="#2CA02C", linewidth=2.5)
@@ -1237,16 +1330,103 @@ class SkatingAerialAlignmentApp:
             shade=False,
         )
 
+    def _draw_avatar(self, markers: np.ndarray) -> None:
+        """Render a lightweight volumetric avatar from the anatomical markers."""
+
+        for surface in self.avatar_surfaces:
+            try:
+                surface.remove()
+            except ValueError:
+                continue
+        self.avatar_surfaces = []
+
+        surfaces = [
+            (
+                "pelvis_origin",
+                "pelvis_thorax_joint_center",
+                0.118,
+                self.AVATAR_SUIT_SHADOW,
+            ),
+            ("pelvis_thorax_joint_center", "thorax_top", 0.125, self.AVATAR_SUIT_COLOR),
+            ("shoulder_left", "elbow_left", 0.050, self.AVATAR_SUIT_COLOR),
+            ("elbow_left", "wrist_left", 0.040, self.AVATAR_SUIT_COLOR),
+            ("wrist_left", "hand_left", 0.026, self.AVATAR_SKIN_COLOR),
+            ("shoulder_right", "elbow_right", 0.050, self.AVATAR_SUIT_COLOR),
+            ("elbow_right", "wrist_right", 0.040, self.AVATAR_SUIT_COLOR),
+            ("wrist_right", "hand_right", 0.026, self.AVATAR_SKIN_COLOR),
+            ("pelvis_origin", "hip_left", 0.072, self.AVATAR_SUIT_SHADOW),
+            ("hip_left", "knee_left", 0.060, self.AVATAR_SUIT_SHADOW),
+            ("knee_left", "ankle_left", 0.048, self.AVATAR_SUIT_SHADOW),
+            ("ankle_left", "toe_left", 0.055, self.AVATAR_BOOT_COLOR),
+            ("pelvis_origin", "hip_right", 0.072, self.AVATAR_SUIT_SHADOW),
+            ("hip_right", "knee_right", 0.060, self.AVATAR_SUIT_SHADOW),
+            ("knee_right", "ankle_right", 0.048, self.AVATAR_SUIT_SHADOW),
+            ("ankle_right", "toe_right", 0.055, self.AVATAR_BOOT_COLOR),
+        ]
+        for start_name, end_name, radius, color in surfaces:
+            start = markers[self.simulator.marker_index[start_name]]
+            end = markers[self.simulator.marker_index[end_name]]
+            x, y, z = _tube_surface(start, end, radius)
+            self.avatar_surfaces.append(
+                self.ax_3d.plot_surface(
+                    x,
+                    y,
+                    z,
+                    color=color,
+                    linewidth=0.0,
+                    antialiased=False,
+                    shade=True,
+                    alpha=0.96,
+                )
+            )
+
+        ellipsoids = [
+            (
+                0.55 * markers[self.simulator.marker_index["pelvis_origin"]]
+                + 0.45 * markers[self.simulator.marker_index["pelvis_thorax_joint_center"]],
+                (0.17, 0.13, 0.14),
+                markers[self.simulator.marker_index["pelvis_thorax_joint_center"]]
+                - markers[self.simulator.marker_index["pelvis_origin"]],
+                self.AVATAR_SUIT_SHADOW,
+            ),
+            (
+                0.52 * markers[self.simulator.marker_index["thorax_top"]]
+                + 0.48 * markers[self.simulator.marker_index["pelvis_thorax_joint_center"]],
+                (0.16, 0.12, 0.19),
+                markers[self.simulator.marker_index["thorax_top"]]
+                - markers[self.simulator.marker_index["pelvis_thorax_joint_center"]],
+                self.AVATAR_SUIT_COLOR,
+            ),
+            (
+                0.68 * markers[self.simulator.marker_index["head_top"]]
+                + 0.32 * markers[self.simulator.marker_index["thorax_top"]],
+                (0.088, 0.092, 0.115),
+                markers[self.simulator.marker_index["head_top"]]
+                - markers[self.simulator.marker_index["thorax_top"]],
+                self.AVATAR_SKIN_COLOR,
+            ),
+        ]
+        for center, radii, direction, color in ellipsoids:
+            x, y, z = _ellipsoid_surface(center, radii, direction)
+            self.avatar_surfaces.append(
+                self.ax_3d.plot_surface(
+                    x,
+                    y,
+                    z,
+                    color=color,
+                    linewidth=0.0,
+                    antialiased=False,
+                    shade=True,
+                    alpha=0.98,
+                )
+            )
+
     def _draw_frame(self, frame_index: int) -> None:
         """Update the 3D skeleton and time cursors for one frame."""
 
         markers, body_axis = self._display_kinematics(frame_index)
         time = self.result.time[frame_index]
-        for line, (start_name, end_name) in zip(self.skeleton_lines, skeleton_connections()):
-            start = markers[self.simulator.marker_index[start_name]]
-            end = markers[self.simulator.marker_index[end_name]]
-            line.set_data([start[0], end[0]], [start[1], end[1]])
-            line.set_3d_properties([start[2], end[2]])
+        self._draw_avatar(markers)
 
         pelvis = markers[self.simulator.marker_index["pelvis_origin"]]
         body_tip = pelvis + 0.5 * body_axis
