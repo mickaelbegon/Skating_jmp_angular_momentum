@@ -9,6 +9,7 @@ from dataclasses import asdict, is_dataclass, replace
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from skating_aerial_alignment.simulation import (
@@ -227,6 +228,109 @@ def run_batch_simulations(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def export_run_plots(arguments: argparse.Namespace) -> int:
+    """Generate standard laboratory figures from one saved run directory."""
+
+    run_dir = Path(arguments.run_dir)
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    timeseries = np.load(run_dir / "timeseries.npz")
+    time = np.asarray(timeseries["time"], dtype=float)
+    q = np.asarray(timeseries["q"], dtype=float)
+    tau = np.asarray(timeseries["tau"], dtype=float)
+    body_axis_alignment_deg = np.asarray(timeseries["body_axis_alignment_deg"], dtype=float)
+    twist_angle_deg = np.rad2deg(np.asarray(timeseries["twist_angle"], dtype=float))
+    twist_rotation_speed_deg_s = np.rad2deg(
+        np.asarray(timeseries["twist_rotation_speed"], dtype=float)
+    )
+    twist_inertia_proxy = np.asarray(timeseries["twist_inertia_proxy"], dtype=float)
+    trunk_angles_deg = np.rad2deg(q[:, 6:9])
+    trunk_torques = tau[:, 6:9]
+    salto_deg = np.rad2deg(q[:, 3])
+
+    figure, axes = plt.subplots(5, 1, figsize=(10, 13), sharex=True)
+    figure.suptitle(
+        f"Run: {summary.get('label') or run_dir.name} | vrille {summary['twist_turns']:.2f} tours"
+    )
+    axes[0].plot(time, body_axis_alignment_deg, color="#D62728", linewidth=2.0)
+    axes[0].set_ylabel("deg")
+    axes[0].set_title("Alignement σ / axe longitudinal")
+
+    axes[1].plot(time, twist_angle_deg, color="#FF7F0E", linewidth=2.0, label="Vrille")
+    axes[1].plot(time, salto_deg, color="#1F77B4", linewidth=2.0, label="Salto")
+    axes[1].legend()
+    axes[1].set_ylabel("deg")
+    axes[1].set_title("Vrille et salto")
+
+    for axis_index, label in enumerate(("Tronc x", "Tronc y", "Tronc z")):
+        axes[2].plot(time, trunk_angles_deg[:, axis_index], linewidth=2.0, label=label)
+    axes[2].legend()
+    axes[2].set_ylabel("deg")
+    axes[2].set_title("3 DoF du tronc")
+
+    for axis_index, label in enumerate(("Couple x", "Couple y", "Couple z")):
+        axes[3].plot(time, trunk_torques[:, axis_index], linewidth=2.0, label=label)
+    axes[3].legend()
+    axes[3].set_ylabel("N.m")
+    axes[3].set_title("Efforts du tronc")
+
+    axes[4].plot(time, twist_inertia_proxy, color="#2CA02C", linewidth=2.0, label="||σ|| / |ω|")
+    axes[4].plot(time, twist_rotation_speed_deg_s, color="#8C564B", linewidth=2.0, label="ω")
+    axes[4].legend()
+    axes[4].set_ylabel("mixte")
+    axes[4].set_xlabel("Temps (s)")
+    axes[4].set_title("Inertie apparente et vitesse de vrille")
+
+    for axis in axes:
+        axis.grid(True, alpha=0.25)
+
+    output_path = run_dir / "plots.png"
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=160, bbox_inches="tight")
+    plt.close(figure)
+    print(output_path)
+    return 0
+
+
+def compare_batch_results(arguments: argparse.Namespace) -> int:
+    """Create a comparison report and a plot from one saved batch directory."""
+
+    batch_dir = Path(arguments.batch_dir)
+    batch_summary_path = batch_dir / "batch_summary.json"
+    summaries = json.loads(batch_summary_path.read_text(encoding="utf-8"))
+    if not isinstance(summaries, list) or not summaries:
+        raise ValueError("The batch summary must be a non-empty list.")
+
+    metric = arguments.metric
+    reverse = not arguments.ascending
+    ordered = sorted(summaries, key=lambda item: float(item[metric]), reverse=reverse)
+
+    comparison_json = batch_dir / f"comparison_{metric}.json"
+    comparison_csv = batch_dir / f"comparison_{metric}.csv"
+    comparison_png = batch_dir / f"comparison_{metric}.png"
+
+    comparison_json.write_text(json.dumps(_to_serializable(ordered), indent=2), encoding="utf-8")
+    with comparison_csv.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(ordered[0].keys()))
+        writer.writeheader()
+        writer.writerows(ordered)
+
+    labels = [item.get("label") or Path(item["run_directory"]).name for item in ordered]
+    values = [float(item[metric]) for item in ordered]
+    figure, axis = plt.subplots(figsize=(max(8, 0.8 * len(labels)), 5))
+    axis.bar(range(len(labels)), values, color="#2E6FBB")
+    axis.set_xticks(range(len(labels)))
+    axis.set_xticklabels(labels, rotation=35, ha="right")
+    axis.set_ylabel(metric)
+    axis.set_title(f"Comparaison batch selon {metric}")
+    axis.grid(True, axis="y", alpha=0.25)
+    figure.tight_layout()
+    figure.savefig(comparison_png, dpi=160, bbox_inches="tight")
+    plt.close(figure)
+
+    print(comparison_json)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create the top-level command-line parser."""
 
@@ -349,6 +453,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="Root folder where the batch results will be saved.",
     )
     batch_parser.set_defaults(handler=run_batch_simulations)
+
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare and rank the runs inside a saved batch directory.",
+    )
+    compare_parser.add_argument(
+        "--batch-dir",
+        type=str,
+        required=True,
+        help="Batch result directory containing batch_summary.json.",
+    )
+    compare_parser.add_argument(
+        "--metric",
+        type=str,
+        default="twist_turns",
+        choices=(
+            "twist_turns",
+            "mean_alignment_deg",
+            "initial_alignment_deg",
+            "peak_twist_rate_deg_s",
+            "peak_trunk_torque_nm",
+            "flight_time_s",
+            "backward_distance_m",
+        ),
+        help="Metric used to rank the runs.",
+    )
+    compare_parser.add_argument(
+        "--ascending",
+        action="store_true",
+        help="Sort the selected metric in ascending order instead of descending.",
+    )
+    compare_parser.set_defaults(handler=compare_batch_results)
+
+    export_parser = subparsers.add_parser(
+        "export-plots",
+        help="Generate standard figures from one saved run directory.",
+    )
+    export_parser.add_argument(
+        "--run-dir",
+        type=str,
+        required=True,
+        help="Run directory containing summary.json and timeseries.npz.",
+    )
+    export_parser.set_defaults(handler=export_run_plots)
 
     return parser
 

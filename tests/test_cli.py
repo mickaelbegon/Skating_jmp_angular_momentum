@@ -91,3 +91,39 @@ def test_cli_batch_simulation_saves_run_directories_and_batch_summary(
     assert "twist_turns" in batch_summary_csv
     assert (output_dir / "run_001_baseline" / "summary.json").exists()
     assert (output_dir / "run_002_tilted" / "timeseries.npz").exists()
+
+
+def test_cli_compare_and_export_plots_commands_generate_reports(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The comparison and plot-export commands work on saved batch results."""
+
+    config_path = tmp_path / "batch.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "scenarios": [
+                    {"label": "baseline", "angular_velocity_rps": [0.0, 0.0, 3.0]},
+                    {"label": "leaned", "angular_velocity_rps": [0.0, 0.3, 3.0]},
+                ]
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "batch_runs"
+    assert main(["batch", "--config", str(config_path), "--output-dir", str(output_dir)]) == 0
+
+    compare_exit_code = main(["compare", "--batch-dir", str(output_dir), "--metric", "twist_turns"])
+    compare_stdout = capsys.readouterr().out.strip()
+    assert compare_exit_code == 0
+    assert compare_stdout.endswith("comparison_twist_turns.json")
+    assert (output_dir / "comparison_twist_turns.csv").exists()
+    assert (output_dir / "comparison_twist_turns.png").exists()
+
+    export_exit_code = main(["export-plots", "--run-dir", str(output_dir / "run_001_baseline")])
+    export_stdout = capsys.readouterr().out.strip()
+    assert export_exit_code == 0
+    assert export_stdout.endswith("plots.png")
+    assert (output_dir / "run_001_baseline" / "plots.png").exists()

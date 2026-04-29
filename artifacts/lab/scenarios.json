@@ -1,0 +1,37 @@
+{
+  "scenarios": [
+    {
+      "label": "baseline_backspin",
+      "angular_velocity_rps": [0.0, 0.0, 3.0],
+      "takeoff_vertical_velocity": 2.4525,
+      "backward_horizontal_velocity": 1.5,
+      "somersault_tilt_deg": 0.0,
+      "inward_tilt_deg": 0.0
+    },
+    {
+      "label": "tilt_inside_minus_10",
+      "angular_velocity_rps": [0.0, 0.3, 3.0],
+      "takeoff_vertical_velocity": 2.4525,
+      "backward_horizontal_velocity": 1.5,
+      "somersault_tilt_deg": 0.0,
+      "inward_tilt_deg": -10.0
+    },
+    {
+      "label": "tilt_inside_plus_10",
+      "angular_velocity_rps": [0.0, -0.3, 3.0],
+      "takeoff_vertical_velocity": 2.4525,
+      "backward_horizontal_velocity": 1.5,
+      "somersault_tilt_deg": 0.0,
+      "inward_tilt_deg": 10.0
+    },
+    {
+      "label": "trunk_pd_active",
+      "angular_velocity_rps": [0.0, 0.2, 3.0],
+      "takeoff_vertical_velocity": 2.4525,
+      "backward_horizontal_velocity": 1.5,
+      "somersault_tilt_deg": 4.0,
+      "inward_tilt_deg": -6.0,
+      "stabilize_trunk": true
+    }
+  ]
+}

@@ -1,90 +1,120 @@
 # Skating Aerial Alignment
 
-Projet Python pour explorer la phase aérienne d'un saut en patinage artistique
-en fonction de l'alignement entre le moment cinétique et l'axe longitudinal du
-corps.
+Projet Python pour explorer la phase aérienne d'un saut en patinage
+artistique en fonction de l'alignement entre le moment cinétique et l'axe
+longitudinal du corps.
 
-L'application fournit :
+Le projet fournit :
 
-- un modèle multicorps `biorbd` simplifié du patineur,
-- une simulation de vol sans gravité pour la dynamique rotationnelle,
-- une GUI `matplotlib` avec sliders, animation 3D et courbes temporelles,
-- une interface en ligne de commande pour lancer et enregistrer des simulations,
-- des tests unitaires et une CI GitHub Actions.
+- un modèle multicorps `biorbd` simplifié du patineur ;
+- une simulation de vol sans gravité pour la dynamique rotationnelle ;
+- une interface graphique interactive ;
+- une interface en ligne de commande pour lancer des campagnes de simulation ;
+- une sauvegarde structurée des résultats pour créer un vrai laboratoire.
 
-## Etat actuel du projet
+## Pour les débutants absolus
 
-Le prototype permet déjà de :
+Si vous n'avez encore rien installé, le plus simple est d'utiliser
+**Miniconda**.
 
-- choisir les composantes du moment cinétique dans le repère global ;
-- exprimer les composantes en équivalent rotations/s dans la posture initiale ;
-- choisir la vitesse verticale via un temps de vol cible ;
-- choisir une vitesse arrière `V_arr` définie comme vitesse du centre de masse ;
-- choisir l'inclinaison initiale en salto et vers l'intérieur ;
-- simuler un vol jusqu'au retour au sol ;
-- stabiliser le tronc avec un contrôleur PD et un réglage automatique ;
-- optimiser l'inclinaison intérieure pour maximiser la vrille ;
-- visualiser l'animation 3D, la trajectoire du CoM, l'angle entre `H` et l'axe
-  longitudinal, la vrille, le salto, les 3 DoF du tronc et les efforts.
+### 1. Installer Miniconda
 
-## Hypothèses principales
+Source officielle :
 
-- Le bassin a 6 DoF flottants.
-- Le tronc a 3 DoF de rotation par rapport au pelvis.
-- Les autres segments sont figés dans une posture compacte de type backspin.
-- La rotation est simulée sans gravité.
-- La translation du centre de masse suit une trajectoire balistique imposée.
-- La vitesse arrière agit sur le CoM et non sur le moment cinétique.
+- [Guide Miniconda officiel](https://www.anaconda.com/docs/getting-started/miniconda/install)
+- [Guide macOS terminal officiel](https://www.anaconda.com/docs/getting-started/miniconda/install/mac-cli-install)
+- [Page Miniconda officielle](https://www.anaconda.com/docs/getting-started/miniconda/main)
 
-## Prérequis
-
-- Python `>= 3.11`
-- `numpy`, `scipy`, `matplotlib`
-- `biorbd` pour la simulation et la GUI
-
-Le projet déclare les dépendances Python standards dans
-[pyproject.toml](/Users/mickaelbegon/Documents/Skating_jmp/pyproject.toml). `biorbd`
-doit être disponible dans l'environnement utilisé pour lancer l'application.
-
-L'interpréteur local utilisé pendant le développement est :
+Si vous êtes sur un Mac Apple Silicon (`M1`, `M2`, `M3`, etc.), ouvrez
+`Terminal` et lancez :
 
 ```bash
-/Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python
+mkdir -p ~/miniconda3
+curl https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh
 ```
 
-## Installation
+Pendant l'installation :
 
-Installation editable :
+1. appuyez sur `Entrée` pour faire défiler la licence ;
+2. tapez `yes` pour accepter ;
+3. acceptez le dossier par défaut sauf si vous savez exactement pourquoi le changer ;
+4. répondez `yes` quand l'installateur propose d'initialiser `conda`.
+
+Ensuite, **fermez complètement le Terminal** puis rouvrez-le.
+
+Vérifiez que Miniconda fonctionne :
+
+```bash
+conda --version
+```
+
+Vous devriez voir quelque chose comme `conda 25.x.x`.
+
+### 2. Créer un environnement Python pour ce projet
+
+Dans le Terminal :
+
+```bash
+conda create -n skating-jump python=3.11 -y
+conda activate skating-jump
+```
+
+Quand l'environnement est actif, vous voyez normalement `(skating-jump)` au
+début de la ligne de commande.
+
+### 3. Installer le projet
+
+Placez-vous dans le dossier du projet :
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-/Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m pip install -e .[test]
 ```
 
-Si `biorbd` n'est pas déjà installé dans l'environnement, il faut l'ajouter à
-part selon votre méthode habituelle.
+Puis installez les dépendances Python du projet :
 
-## Lancement
+```bash
+python -m pip install -e .[test]
+```
 
-Depuis la racine du projet :
+### 4. Installer `biorbd`
+
+Le projet a besoin de `biorbd`. Comme son installation dépend souvent de
+l'environnement scientifique déjà utilisé, gardez votre méthode habituelle si
+vous en avez une.
+
+Si `biorbd` n'est pas encore installé dans votre environnement, il faut
+l'ajouter avant de lancer le projet.
+
+### 5. Vérifier que tout marche
+
+```bash
+python -m pytest -q
+```
+
+Si les tests passent, l'environnement est prêt.
+
+## Démarrage rapide
+
+### Lancer la GUI
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python skating_aerial_alignment_gui.py
+PYTHONPATH=src python skating_aerial_alignment_gui.py
 ```
 
-Alternative via le module :
+Alternative :
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment
+PYTHONPATH=src python -m skating_aerial_alignment gui
 ```
 
-Lancement d'une simulation unique en ligne de commande :
+### Lancer une simulation unique
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment simulate \
+PYTHONPATH=src python -m skating_aerial_alignment simulate \
   --output-dir artifacts/lab/run_demo \
   --sigma-rps 0.0 0.2 3.0 \
   --vertical-velocity 2.6 \
@@ -93,106 +123,100 @@ PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m ska
   --print-summary
 ```
 
-Lancement d'un batch :
+### Lancer un batch complet
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment batch \
+PYTHONPATH=src python -m skating_aerial_alignment batch \
   --config artifacts/lab/scenarios.json \
   --output-dir artifacts/lab/batch_001
 ```
 
-Chaque run sauvegarde :
+### Comparer les résultats d'un batch
+
+```bash
+cd /Users/mickaelbegon/Documents/Skating_jmp
+PYTHONPATH=src python -m skating_aerial_alignment compare \
+  --batch-dir artifacts/lab/batch_001 \
+  --metric twist_turns
+```
+
+### Exporter les figures d'un run
+
+```bash
+cd /Users/mickaelbegon/Documents/Skating_jmp
+PYTHONPATH=src python -m skating_aerial_alignment export-plots \
+  --run-dir artifacts/lab/batch_001/run_001_baseline_backspin
+```
+
+## Ce que la CLI sauvegarde
+
+Pour un run unique :
 
 - `parameters.json`
 - `summary.json`
 - `timeseries.npz`
 
-Un batch sauvegarde aussi :
+Pour un batch :
 
+- un dossier par scénario ;
 - `batch_summary.json`
 - `batch_summary.csv`
+- `comparison_<metric>.json`
+- `comparison_<metric>.csv`
+- `comparison_<metric>.png`
 
-## Utilisation rapide
+## Scénarios déjà prêts
 
-Dans la GUI :
+Le dossier [artifacts/lab](/Users/mickaelbegon/Documents/Skating_jmp/artifacts/lab)
+contient déjà :
 
-- `Hx`, `Hy`, `Hz` contrôlent le moment cinétique global sous forme
-  d'équivalents rotations/s ;
-- `Temps de vol (s)` pilote la vitesse verticale de décollage ;
-- `V_arr (m/s)` pilote la vitesse arrière du centre de masse ;
-- `Incl. salto (deg)` et `Incl. int. (deg)` règlent la posture initiale ;
-- `Stabiliser le tronc` active la stabilisation PD avec tuning automatique ;
-- `Avatar de face (vrille=0)` fige la coordonnée de vrille pour la vue 3D ;
-- `Optimiser incl. interieure` cherche une inclinaison intérieure favorable à
-  la vrille ;
-- `Pause`, `Reset` et le slider temporel permettent de naviguer dans le vol ;
-- `Vitesse 100% / 50% / 25%` ajuste la vitesse de lecture.
+- [scenarios.json](/Users/mickaelbegon/Documents/Skating_jmp/artifacts/lab/scenarios.json)
+  : un batch de démonstration ;
+- [README.md](/Users/mickaelbegon/Documents/Skating_jmp/artifacts/lab/README.md)
+  : les commandes prêtes à lancer.
 
-Les figures montrent notamment :
+## Ce qu'on peut déjà étudier
 
-- l'angle entre le moment cinétique et l'axe longitudinal ;
-- la vrille et le salto avec double axe vertical ;
-- les 3 rotations du tronc ;
-- les couples du tronc ;
-- l'inertie apparente en vrille `||H|| / |omega_vrille|`.
+Le prototype permet déjà de :
 
-## Configuration batch
+- choisir les composantes du moment cinétique dans le repère global ;
+- exprimer ces composantes en équivalent rotations/s ;
+- choisir la vitesse verticale via un temps de vol cible ;
+- choisir une vitesse arrière du centre de masse ;
+- choisir l'inclinaison initiale en salto et vers l'intérieur ;
+- simuler un vol jusqu'au retour au sol ;
+- stabiliser le tronc avec un contrôleur PD ;
+- optimiser l'inclinaison intérieure pour maximiser la vrille ;
+- comparer plusieurs scénarios entre eux ;
+- exporter les séries temporelles et les figures.
 
-Exemple minimal de fichier `scenarios.json` :
+## Idées de laboratoire à ajouter ensuite
 
-```json
-{
-  "scenarios": [
-    {
-      "label": "baseline",
-      "angular_velocity_rps": [0.0, 0.0, 3.0]
-    },
-    {
-      "label": "tilt_minus_10",
-      "angular_velocity_rps": [0.0, 0.4, 3.0],
-      "inward_tilt_deg": -10.0,
-      "backward_horizontal_velocity": 1.2
-    }
-  ]
-}
-```
+Voici les axes les plus intéressants pour faire grossir le laboratoire :
 
-## Tests et qualité
+- bibliothèques de protocoles prêtes à l'emploi ;
+- balayages automatiques de paramètres ;
+- exports automatiques de figures et de rapports ;
+- comparaisons multi-critères ;
+- optimisation batch des gains PD ;
+- optimisation batch de l'inclinaison intérieure ;
+- tableaux récapitulatifs de campagnes ;
+- archivage de toutes les campagnes dans une base légère ;
+- génération automatique de vidéos ;
+- analyse de sensibilité ;
+- profils de patineurs différents ;
+- version plus riche du modèle biomécanique.
 
-Suite complète :
-
-```bash
-cd /Users/mickaelbegon/Documents/Skating_jmp
-MPLBACKEND=Agg MPLCONFIGDIR=/tmp/mpl PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m pytest -q
-```
-
-Vérifications de style :
-
-```bash
-cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m black . --check
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m isort . --check-only --profile black
-PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m flake8 .
-```
-
-La CI est définie dans
-[ci.yml](/Users/mickaelbegon/Documents/Skating_jmp/.github/workflows/ci.yml).
-
-## Structure du dépôt
+## Structure utile du dépôt
 
 - [src/skating_aerial_alignment/modeling/biomod.py](/Users/mickaelbegon/Documents/Skating_jmp/src/skating_aerial_alignment/modeling/biomod.py)
   : construction du modèle `biorbd`
 - [src/skating_aerial_alignment/simulation/flight.py](/Users/mickaelbegon/Documents/Skating_jmp/src/skating_aerial_alignment/simulation/flight.py)
-  : simulation du vol, observables et optimisations simples
+  : simulation du vol
+- [src/skating_aerial_alignment/cli.py](/Users/mickaelbegon/Documents/Skating_jmp/src/skating_aerial_alignment/cli.py)
+  : CLI du laboratoire
 - [src/skating_aerial_alignment/visualization/app.py](/Users/mickaelbegon/Documents/Skating_jmp/src/skating_aerial_alignment/visualization/app.py)
-  : interface graphique `matplotlib`
+  : interface graphique
 - [tests](/Users/mickaelbegon/Documents/Skating_jmp/tests)
-  : tests unitaires et smoke tests GUI
-
-## Limites actuelles
-
-- Le modèle reste volontairement réduit.
-- La stabilisation du tronc est basée sur un PD, pas sur une OCP complète.
-- Les membres ne sont pas encore articulés indépendamment.
-- L'interface est pensée d'abord pour l'exploration et le prototypage.
+  : tests unitaires
