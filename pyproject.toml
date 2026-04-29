@@ -31,6 +31,7 @@ test = [
 
 [project.scripts]
 skating-aerial-alignment = "skating_aerial_alignment.__main__:main"
+skating-aerial-alignment-gui = "skating_aerial_alignment.cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

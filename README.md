@@ -9,6 +9,7 @@ L'application fournit :
 - un modèle multicorps `biorbd` simplifié du patineur,
 - une simulation de vol sans gravité pour la dynamique rotationnelle,
 - une GUI `matplotlib` avec sliders, animation 3D et courbes temporelles,
+- une interface en ligne de commande pour lancer et enregistrer des simulations,
 - des tests unitaires et une CI GitHub Actions.
 
 ## Etat actuel du projet
@@ -79,6 +80,39 @@ cd /Users/mickaelbegon/Documents/Skating_jmp
 PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment
 ```
 
+Lancement d'une simulation unique en ligne de commande :
+
+```bash
+cd /Users/mickaelbegon/Documents/Skating_jmp
+PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment simulate \
+  --output-dir artifacts/lab/run_demo \
+  --sigma-rps 0.0 0.2 3.0 \
+  --vertical-velocity 2.6 \
+  --backward-velocity 1.5 \
+  --inward-tilt-deg -8 \
+  --print-summary
+```
+
+Lancement d'un batch :
+
+```bash
+cd /Users/mickaelbegon/Documents/Skating_jmp
+PYTHONPATH=src /Users/mickaelbegon/miniconda3/envs/vitpose-ekf/bin/python -m skating_aerial_alignment batch \
+  --config artifacts/lab/scenarios.json \
+  --output-dir artifacts/lab/batch_001
+```
+
+Chaque run sauvegarde :
+
+- `parameters.json`
+- `summary.json`
+- `timeseries.npz`
+
+Un batch sauvegarde aussi :
+
+- `batch_summary.json`
+- `batch_summary.csv`
+
 ## Utilisation rapide
 
 Dans la GUI :
@@ -102,6 +136,27 @@ Les figures montrent notamment :
 - les 3 rotations du tronc ;
 - les couples du tronc ;
 - l'inertie apparente en vrille `||H|| / |omega_vrille|`.
+
+## Configuration batch
+
+Exemple minimal de fichier `scenarios.json` :
+
+```json
+{
+  "scenarios": [
+    {
+      "label": "baseline",
+      "angular_velocity_rps": [0.0, 0.0, 3.0]
+    },
+    {
+      "label": "tilt_minus_10",
+      "angular_velocity_rps": [0.0, 0.4, 3.0],
+      "inward_tilt_deg": -10.0,
+      "backward_horizontal_velocity": 1.2
+    }
+  ]
+}
+```
 
 ## Tests et qualité
 
