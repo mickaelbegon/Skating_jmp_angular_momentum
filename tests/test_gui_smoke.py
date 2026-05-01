@@ -45,8 +45,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_menu_visible is False
         assert app.playback_menu_axis.get_visible() is False
         assert app.retune_pd_button.label.get_text() == "Retuner PD"
-        assert app.save_button.label.get_text() == "↓"
-        assert app.load_button.label.get_text() == "↑"
+        assert app.save_button.label.get_text() == "Save"
+        assert app.load_button.label.get_text() == "Load"
         assert app.speed_button.label.get_text() == "Vit. 100%"
         assert app.pause_button.label.get_text() == "||"
         assert len(app.control_section_titles) == 4
@@ -348,14 +348,13 @@ def test_gui_state_can_be_saved_and_loaded(tmp_path) -> None:
     """Saving then loading the GUI state restores sliders, checkboxes, and playback speed."""
 
     state_path = tmp_path / "gui_state.json"
-    app = SkatingAerialAlignmentApp()
+    app = SkatingAerialAlignmentApp(gui_state_path=state_path)
     try:
         app.sliders["tilt_rps"].set_val(0.45)
         app.sliders["inward_tilt"].set_val(-12.0)
         app.stabilization_checkbox.set_active(1)
         app.playback_selector.set_active(1)
 
-        app._select_json_path = lambda save: state_path
         app._save_gui_state(None)
 
         payload = json.loads(state_path.read_text(encoding="utf-8"))
@@ -374,6 +373,24 @@ def test_gui_state_can_be_saved_and_loaded(tmp_path) -> None:
         assert app.sliders["inward_tilt"].val == pytest.approx(-12.0)
         assert app._face_view_enabled() is True
         assert app.playback_selector.value_selected == "50%"
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_loading_missing_gui_state_is_a_noop(tmp_path) -> None:
+    """Loading with no saved state file leaves the GUI unchanged."""
+
+    state_path = tmp_path / "missing_gui_state.json"
+    app = SkatingAerialAlignmentApp(gui_state_path=state_path)
+    try:
+        initial_tilt = app.sliders["tilt_rps"].val
+        initial_speed = app.playback_selector.value_selected
+
+        app._load_gui_state(None)
+
+        assert app.sliders["tilt_rps"].val == pytest.approx(initial_tilt)
+        assert app.playback_selector.value_selected == initial_speed
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

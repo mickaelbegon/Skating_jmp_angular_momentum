@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import json
-import tkinter as tk
 from dataclasses import replace
 from pathlib import Path
-from tkinter import filedialog
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -192,7 +190,11 @@ class SkatingAerialAlignmentApp:
     DISPLAY_INTERVAL_ESTIMATE_MS = 33.0
     DEFAULT_GUI_STATE_PATH = Path("artifacts") / "gui_state.json"
 
-    def __init__(self, pd_cache_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        pd_cache_path: str | Path | None = None,
+        gui_state_path: str | Path | None = None,
+    ) -> None:
         """Create the figure, controls, and initial simulation."""
 
         mpl.rcParams["axes3d.mouserotationstyle"] = "azel"
@@ -201,6 +203,9 @@ class SkatingAerialAlignmentApp:
             Path(pd_cache_path)
             if pd_cache_path is not None
             else Path("artifacts") / "pd_tuning_cache.json"
+        )
+        self.gui_state_path = (
+            Path(gui_state_path) if gui_state_path is not None else self.DEFAULT_GUI_STATE_PATH
         )
         self.optimization_result: PDOptimizationResult | None = None
         self.optimization_result_signature: tuple[float, ...] | None = None
@@ -588,17 +593,17 @@ class SkatingAerialAlignmentApp:
         self._style_button(self.retune_pd_button, fill="#FFFFFF", edge="#B9C5D3")
         self.retune_pd_button.on_clicked(self._retune_pd_controller)
 
-        save_axis = self.figure.add_axes([0.805, 0.157, 0.052, 0.042])
-        self.save_button = Button(save_axis, "↓")
+        save_axis = self.figure.add_axes([0.792, 0.157, 0.074, 0.042])
+        self.save_button = Button(save_axis, "Save")
         self._style_button(self.save_button, fill="#FFFFFF", edge="#B9C5D3")
         self.save_button.on_clicked(self._save_gui_state)
 
-        load_axis = self.figure.add_axes([0.863, 0.157, 0.052, 0.042])
-        self.load_button = Button(load_axis, "↑")
+        load_axis = self.figure.add_axes([0.872, 0.157, 0.074, 0.042])
+        self.load_button = Button(load_axis, "Load")
         self._style_button(self.load_button, fill="#FFFFFF", edge="#B9C5D3")
         self.load_button.on_clicked(self._load_gui_state)
 
-        reset_axis = self.figure.add_axes([0.921, 0.157, 0.049, 0.042])
+        reset_axis = self.figure.add_axes([0.952, 0.157, 0.040, 0.042])
         self.reset_button = Button(reset_axis, "Reset")
         self._style_button(
             self.reset_button,
@@ -1073,31 +1078,10 @@ class SkatingAerialAlignmentApp:
         if "time" in state:
             self.time_slider.set_val(float(state["time"]))
 
-    def _select_json_path(self, *, save: bool) -> Path | None:
-        """Open a native file dialog and return the selected JSON path."""
+    def _resolved_gui_state_path(self) -> Path:
+        """Return the JSON path used to persist the GUI state."""
 
-        root = tk.Tk()
-        root.withdraw()
-        root.update()
-        try:
-            if save:
-                filename = filedialog.asksaveasfilename(
-                    title="Sauvegarder l'etat GUI",
-                    defaultextension=".json",
-                    filetypes=[("JSON", "*.json")],
-                    initialfile=self.DEFAULT_GUI_STATE_PATH.name,
-                    initialdir=str(self.DEFAULT_GUI_STATE_PATH.parent),
-                )
-            else:
-                filename = filedialog.askopenfilename(
-                    title="Charger l'etat GUI",
-                    defaultextension=".json",
-                    filetypes=[("JSON", "*.json")],
-                    initialdir=str(self.DEFAULT_GUI_STATE_PATH.parent),
-                )
-        finally:
-            root.destroy()
-        return Path(filename) if filename else None
+        return self.gui_state_path.expanduser()
 
     def _synchronize_optimization_mode_checkboxes(self, changed_value) -> None:
         """Keep the two inward-tilt optimization modes mutually exclusive."""
@@ -1308,9 +1292,7 @@ class SkatingAerialAlignmentApp:
     def _save_gui_state(self, _event) -> None:
         """Save the current GUI state to a JSON file."""
 
-        path = self._select_json_path(save=True)
-        if path is None:
-            return
+        path = self._resolved_gui_state_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(self._serialize_gui_state(), indent=2),
@@ -1320,8 +1302,8 @@ class SkatingAerialAlignmentApp:
     def _load_gui_state(self, _event) -> None:
         """Load one previously saved GUI state from JSON."""
 
-        path = self._select_json_path(save=False)
-        if path is None or not path.exists():
+        path = self._resolved_gui_state_path()
+        if not path.exists():
             return
         payload = json.loads(path.read_text(encoding="utf-8"))
         self._apply_gui_state(payload)
