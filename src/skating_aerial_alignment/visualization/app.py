@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import tkinter as tk
 from dataclasses import replace
 from pathlib import Path
+from tkinter import filedialog
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -188,6 +190,7 @@ class SkatingAerialAlignmentApp:
     TEXT_PRIMARY = "#14212B"
     TEXT_SECONDARY = "#475467"
     DISPLAY_INTERVAL_ESTIMATE_MS = 33.0
+    DEFAULT_GUI_STATE_PATH = Path("artifacts") / "gui_state.json"
 
     def __init__(self, pd_cache_path: str | Path | None = None) -> None:
         """Create the figure, controls, and initial simulation."""
@@ -219,6 +222,7 @@ class SkatingAerialAlignmentApp:
         self._updating_time_slider = False
         self._updating_inward_tilt_slider = False
         self._updating_checkbox_state = False
+        self._updating_gui_state = False
         self.playback_menu_visible = False
         self.playback_text_artist = None
 
@@ -557,13 +561,44 @@ class SkatingAerialAlignmentApp:
             self._style_slider(slider)
             slider.on_changed(self._on_parameter_change)
             self.sliders[name] = slider
+            if name == "inward_tilt":
+                zero_marker = slider.ax.axvline(
+                    0.0,
+                    color="#9AA8B6",
+                    linewidth=1.0,
+                    linestyle="--",
+                    alpha=0.85,
+                    zorder=0,
+                )
+                zero_label = slider.ax.text(
+                    0.0,
+                    1.55,
+                    "0°",
+                    fontsize=7.5,
+                    color="#6B7785",
+                    ha="center",
+                    va="bottom",
+                    transform=slider.ax.get_xaxis_transform(),
+                )
+                slider._zero_marker = zero_marker
+                slider._zero_label = zero_label
 
         retune_pd_axis = self.figure.add_axes([0.685, 0.157, 0.110, 0.042])
         self.retune_pd_button = Button(retune_pd_axis, "Retuner PD")
         self._style_button(self.retune_pd_button, fill="#FFFFFF", edge="#B9C5D3")
         self.retune_pd_button.on_clicked(self._retune_pd_controller)
 
-        reset_axis = self.figure.add_axes([0.815, 0.157, 0.110, 0.042])
+        save_axis = self.figure.add_axes([0.805, 0.157, 0.052, 0.042])
+        self.save_button = Button(save_axis, "↓")
+        self._style_button(self.save_button, fill="#FFFFFF", edge="#B9C5D3")
+        self.save_button.on_clicked(self._save_gui_state)
+
+        load_axis = self.figure.add_axes([0.863, 0.157, 0.052, 0.042])
+        self.load_button = Button(load_axis, "↑")
+        self._style_button(self.load_button, fill="#FFFFFF", edge="#B9C5D3")
+        self.load_button.on_clicked(self._load_gui_state)
+
+        reset_axis = self.figure.add_axes([0.921, 0.157, 0.049, 0.042])
         self.reset_button = Button(reset_axis, "Reset")
         self._style_button(
             self.reset_button,
@@ -960,11 +995,120 @@ class SkatingAerialAlignmentApp:
         finally:
             self._updating_inward_tilt_slider = False
 
+    def _set_checkbox_state(self, index: int, active: bool) -> None:
+        """Force one checkbox to a desired state without guessing its current toggle intent."""
+
+        if self._checkbox_enabled(index) == active:
+            return
+        self._updating_checkbox_state = True
+        try:
+            self.stabilization_checkbox.set_active(index)
+        finally:
+            self._updating_checkbox_state = False
+
+    def _serialize_gui_state(self) -> dict[str, object]:
+        """Return a JSON-friendly snapshot of the current GUI state."""
+
+        return {
+            "sliders": {name: float(slider.val) for name, slider in self.sliders.items()},
+            "checkboxes": {
+                "stabilize_trunk": self._stabilization_enabled(),
+                "face_view": self._face_view_enabled(),
+                "optimize_inward_tilt": self._inward_tilt_optimization_enabled(),
+                "optimize_alignment": self._alignment_optimization_enabled(),
+            },
+            "playback_speed": self.playback_selector.value_selected,
+            "time": float(self.time_slider.val),
+        }
+
+    def _apply_gui_state(self, state: dict[str, object]) -> None:
+        """Apply a previously saved GUI state."""
+
+        self._updating_gui_state = True
+        try:
+            slider_values = dict(state.get("sliders", {}))
+            checkbox_values = dict(state.get("checkboxes", {}))
+
+            for slider_name in (
+                "salto_rps",
+                "tilt_rps",
+                "twist_rps",
+                "backward_velocity",
+                "flight_time",
+                "somersault_tilt",
+                "inward_tilt",
+            ):
+                if slider_name in slider_values:
+                    self.sliders[slider_name].set_val(float(slider_values[slider_name]))
+
+            if "playback_speed" in state:
+                speed_label = str(state["playback_speed"])
+                available_labels = [label.get_text() for label in self.playback_selector.labels]
+                if speed_label in available_labels:
+                    for index, label in enumerate(self.playback_selector.labels):
+                        if (
+                            label.get_text() == speed_label
+                            and self.playback_selector.value_selected != speed_label
+                        ):
+                            self.playback_selector.set_active(index)
+                            break
+
+            self._set_checkbox_state(0, bool(checkbox_values.get("stabilize_trunk", False)))
+            self._set_checkbox_state(1, bool(checkbox_values.get("face_view", False)))
+            self._set_checkbox_state(
+                self.TWIST_OPTIMIZATION_INDEX,
+                bool(checkbox_values.get("optimize_inward_tilt", False)),
+            )
+            self._set_checkbox_state(
+                self.ALIGNMENT_OPTIMIZATION_INDEX,
+                bool(checkbox_values.get("optimize_alignment", False)),
+            )
+        finally:
+            self._updating_gui_state = False
+
+        self.parameters = self._collect_parameters()
+        self._simulate_with_current_parameters()
+        self._refresh_from_result(reset_animation=True)
+
+        if "time" in state:
+            self.time_slider.set_val(float(state["time"]))
+
+    def _select_json_path(self, *, save: bool) -> Path | None:
+        """Open a native file dialog and return the selected JSON path."""
+
+        root = tk.Tk()
+        root.withdraw()
+        root.update()
+        try:
+            if save:
+                filename = filedialog.asksaveasfilename(
+                    title="Sauvegarder l'etat GUI",
+                    defaultextension=".json",
+                    filetypes=[("JSON", "*.json")],
+                    initialfile=self.DEFAULT_GUI_STATE_PATH.name,
+                    initialdir=str(self.DEFAULT_GUI_STATE_PATH.parent),
+                )
+            else:
+                filename = filedialog.askopenfilename(
+                    title="Charger l'etat GUI",
+                    defaultextension=".json",
+                    filetypes=[("JSON", "*.json")],
+                    initialdir=str(self.DEFAULT_GUI_STATE_PATH.parent),
+                )
+        finally:
+            root.destroy()
+        return Path(filename) if filename else None
+
     def _synchronize_optimization_mode_checkboxes(self, changed_value) -> None:
         """Keep the two inward-tilt optimization modes mutually exclusive."""
 
         if self._updating_checkbox_state or not isinstance(changed_value, str):
             return
+        if changed_value == self.ALIGNMENT_OPTIMIZATION_LABEL:
+            if self._alignment_optimization_enabled():
+                self._set_checkbox_state(0, False)
+            else:
+                self._set_inward_tilt_slider_value(0.0)
         if (
             changed_value == self.TWIST_OPTIMIZATION_LABEL
             and self._inward_tilt_optimization_enabled()
@@ -1107,7 +1251,7 @@ class SkatingAerialAlignmentApp:
     def _on_parameter_change(self, _value) -> None:
         """Re-simulate after a slider or checkbox update."""
 
-        if self._updating_inward_tilt_slider:
+        if self._updating_inward_tilt_slider or self._updating_gui_state:
             return
         self._synchronize_optimization_mode_checkboxes(_value)
         self.parameters = self._collect_parameters()
@@ -1160,6 +1304,27 @@ class SkatingAerialAlignmentApp:
             self.playback_selector.set_active(0)
         if self.playback_menu_visible:
             self._set_playback_menu_visible(False)
+
+    def _save_gui_state(self, _event) -> None:
+        """Save the current GUI state to a JSON file."""
+
+        path = self._select_json_path(save=True)
+        if path is None:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(self._serialize_gui_state(), indent=2),
+            encoding="utf-8",
+        )
+
+    def _load_gui_state(self, _event) -> None:
+        """Load one previously saved GUI state from JSON."""
+
+        path = self._select_json_path(save=False)
+        if path is None or not path.exists():
+            return
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self._apply_gui_state(payload)
 
     def _on_playback_change(self, label: str) -> None:
         """Update the playback speed from the speed selector."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import matplotlib as mpl
@@ -44,6 +45,8 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.playback_menu_visible is False
         assert app.playback_menu_axis.get_visible() is False
         assert app.retune_pd_button.label.get_text() == "Retuner PD"
+        assert app.save_button.label.get_text() == "↓"
+        assert app.load_button.label.get_text() == "↑"
         assert app.speed_button.label.get_text() == "Vit. 100%"
         assert app.pause_button.label.get_text() == "||"
         assert len(app.control_section_titles) == 4
@@ -62,6 +65,9 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.control_panels["time"].get_position().x1 < 0.62
         assert app.pause_button.ax.get_position().height < 0.035
         assert app.time_slider.ax.get_position().width < 0.34
+        assert hasattr(app.sliders["inward_tilt"], "_zero_marker")
+        assert hasattr(app.sliders["inward_tilt"], "_zero_label")
+        assert app.sliders["inward_tilt"]._zero_label.get_text() == "0°"
         assert app.ax_rotation.get_position().x1 < 0.94
         assert app.ax_rotation.get_ylabel() == "Vrille (deg)"
         assert app.ax_rotation_salto.get_ylabel() == "Salto (deg)"
@@ -284,6 +290,42 @@ def test_enabling_alignment_optimization_updates_the_slider_and_result() -> None
         plt.close(app.figure)
 
 
+def test_disabling_alignment_optimization_resets_inward_tilt_to_zero() -> None:
+    """Turning off alignment optimization restores a neutral inward tilt."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(3)
+        assert app._alignment_optimization_enabled() is True
+
+        app.stabilization_checkbox.set_active(3)
+
+        assert app._alignment_optimization_enabled() is False
+        assert app.sliders["inward_tilt"].val == pytest.approx(0.0)
+        assert app.parameters.inward_tilt_deg == pytest.approx(0.0)
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_enabling_alignment_optimization_disables_trunk_stabilization() -> None:
+    """The angle-optimization mode cannot stay active with trunk stabilization."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(0)
+        assert app._stabilization_enabled() is True
+
+        app.stabilization_checkbox.set_active(3)
+
+        assert app._alignment_optimization_enabled() is True
+        assert app._stabilization_enabled() is False
+        assert app.parameters.stabilize_trunk is False
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
 def test_alignment_and_twist_optimization_modes_are_mutually_exclusive() -> None:
     """Selecting one inward-tilt optimization mode disables the other one."""
 
@@ -297,6 +339,41 @@ def test_alignment_and_twist_optimization_modes_are_mutually_exclusive() -> None
 
         assert app._alignment_optimization_enabled() is True
         assert app._inward_tilt_optimization_enabled() is False
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_gui_state_can_be_saved_and_loaded(tmp_path) -> None:
+    """Saving then loading the GUI state restores sliders, checkboxes, and playback speed."""
+
+    state_path = tmp_path / "gui_state.json"
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.sliders["tilt_rps"].set_val(0.45)
+        app.sliders["inward_tilt"].set_val(-12.0)
+        app.stabilization_checkbox.set_active(1)
+        app.playback_selector.set_active(1)
+
+        app._select_json_path = lambda save: state_path
+        app._save_gui_state(None)
+
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        assert payload["sliders"]["tilt_rps"] == pytest.approx(0.45)
+        assert payload["checkboxes"]["face_view"] is True
+        assert payload["playback_speed"] == "50%"
+
+        app.sliders["tilt_rps"].set_val(-0.25)
+        app.sliders["inward_tilt"].set_val(8.0)
+        app.stabilization_checkbox.set_active(1)
+        app.playback_selector.set_active(0)
+
+        app._load_gui_state(None)
+
+        assert app.sliders["tilt_rps"].val == pytest.approx(0.45)
+        assert app.sliders["inward_tilt"].val == pytest.approx(-12.0)
+        assert app._face_view_enabled() is True
+        assert app.playback_selector.value_selected == "50%"
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
