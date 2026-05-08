@@ -100,14 +100,14 @@ Si les tests passent, l'environnement est prêt.
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src python skating_aerial_alignment_gui.py
+python skating_aerial_alignment_gui.py
 ```
 
 Alternative :
 
 ```bash
 cd /Users/mickaelbegon/Documents/Skating_jmp
-PYTHONPATH=src python -m skating_aerial_alignment gui
+python -m skating_aerial_alignment gui
 ```
 
 ### Lancer une simulation unique

@@ -585,9 +585,9 @@ class SkaterFlightSimulator:
             velocity_cost = float(np.sum(trunk_velocities[-1] ** 2))
             torque_cost = float(np.sum(trunk_torques[-1] ** 2))
         else:
-            angle_cost = float(np.trapz(np.sum(trunk_angles**2, axis=1), time))
-            velocity_cost = float(np.trapz(np.sum(trunk_velocities**2, axis=1), time))
-            torque_cost = float(np.trapz(np.sum(trunk_torques**2, axis=1), time))
+            angle_cost = float(np.trapezoid(np.sum(trunk_angles**2, axis=1), time))
+            velocity_cost = float(np.trapezoid(np.sum(trunk_velocities**2, axis=1), time))
+            torque_cost = float(np.trapezoid(np.sum(trunk_torques**2, axis=1), time))
 
         terminal_cost = float(
             10.0 * np.sum(trunk_angles[-1] ** 2) + 2.0 * np.sum(trunk_velocities[-1] ** 2)
@@ -607,7 +607,7 @@ class SkaterFlightSimulator:
 
         if result.time.size <= 1 or np.isclose(result.flight_time, 0.0):
             return float(result.body_axis_alignment_deg[0])
-        integral = float(np.trapz(result.body_axis_alignment_deg, result.time))
+        integral = float(np.trapezoid(result.body_axis_alignment_deg, result.time))
         return integral / float(result.time[-1] - result.time[0])
 
     def tune_trunk_controller(
