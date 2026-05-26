@@ -205,6 +205,29 @@ def test_retune_pd_button_runs_explicit_pd_tuning(tmp_path) -> None:
         assert app.optimization_result is not None
         assert app.parameters.controller == app.optimization_result.controller
         assert app.parameters.controller != initial_controller
+        assert app.retune_pd_button.label.get_text() == app.RETUNE_PD_LABEL
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_retune_pd_button_displays_computing_symbol_while_tuning(tmp_path, monkeypatch) -> None:
+    """The explicit retune action exposes a visible busy state during computation."""
+
+    app = SkatingAerialAlignmentApp(pd_cache_path=tmp_path / "pd_tuning_cache.json")
+    observed_labels = []
+    try:
+        app.stabilization_checkbox.set_active(0)
+
+        def fake_apply_pd_tuning(parameters):
+            observed_labels.append(app.retune_pd_button.label.get_text())
+            return parameters
+
+        monkeypatch.setattr(app, "_apply_pd_tuning", fake_apply_pd_tuning)
+        app._retune_pd_controller(None)
+
+        assert observed_labels == [app.RETUNE_PD_BUSY_LABEL]
+        assert app.retune_pd_button.label.get_text() == app.RETUNE_PD_LABEL
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
@@ -350,29 +373,55 @@ def test_gui_state_can_be_saved_and_loaded(tmp_path) -> None:
     state_path = tmp_path / "gui_state.json"
     app = SkatingAerialAlignmentApp(gui_state_path=state_path)
     try:
+        app.sliders["salto_rps"].set_val(0.12)
         app.sliders["tilt_rps"].set_val(0.45)
+        app.sliders["twist_rps"].set_val(2.25)
+        app.sliders["backward_velocity"].set_val(3.1)
+        app.sliders["flight_time"].set_val(0.6)
+        app.sliders["somersault_tilt"].set_val(7.0)
         app.sliders["inward_tilt"].set_val(-12.0)
+        app.stabilization_checkbox.set_active(0)
         app.stabilization_checkbox.set_active(1)
         app.playback_selector.set_active(1)
+        saved_time = float(app.result.time[len(app.result.time) // 3])
+        app.time_slider.set_val(saved_time)
 
         app._save_gui_state(None)
 
         payload = json.loads(state_path.read_text(encoding="utf-8"))
+        assert set(payload["sliders"]) == set(app.sliders)
         assert payload["sliders"]["tilt_rps"] == pytest.approx(0.45)
+        assert payload["checkboxes"]["stabilize_trunk"] is True
         assert payload["checkboxes"]["face_view"] is True
         assert payload["playback_speed"] == "50%"
+        assert payload["time"] == pytest.approx(saved_time)
+        assert app.file_status_artist.get_text() == "Etat sauvegarde: gui_state.json"
 
+        app.sliders["salto_rps"].set_val(0.0)
         app.sliders["tilt_rps"].set_val(-0.25)
+        app.sliders["twist_rps"].set_val(1.0)
+        app.sliders["backward_velocity"].set_val(1.0)
+        app.sliders["flight_time"].set_val(0.4)
+        app.sliders["somersault_tilt"].set_val(0.0)
         app.sliders["inward_tilt"].set_val(8.0)
+        app.stabilization_checkbox.set_active(0)
         app.stabilization_checkbox.set_active(1)
         app.playback_selector.set_active(0)
 
         app._load_gui_state(None)
 
+        assert app.sliders["salto_rps"].val == pytest.approx(0.12)
         assert app.sliders["tilt_rps"].val == pytest.approx(0.45)
+        assert app.sliders["twist_rps"].val == pytest.approx(2.25)
+        assert app.sliders["backward_velocity"].val == pytest.approx(3.1)
+        assert app.sliders["flight_time"].val == pytest.approx(0.6)
+        assert app.sliders["somersault_tilt"].val == pytest.approx(7.0)
         assert app.sliders["inward_tilt"].val == pytest.approx(-12.0)
+        assert app._stabilization_enabled() is True
         assert app._face_view_enabled() is True
         assert app.playback_selector.value_selected == "50%"
+        assert app.time_slider.val == pytest.approx(saved_time)
+        assert app.file_status_artist.get_text() == "Etat charge: gui_state.json"
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)
@@ -391,6 +440,25 @@ def test_loading_missing_gui_state_is_a_noop(tmp_path) -> None:
 
         assert app.sliders["tilt_rps"].val == pytest.approx(initial_tilt)
         assert app.playback_selector.value_selected == initial_speed
+        assert app.file_status_artist.get_text() == "Fichier absent: missing_gui_state.json"
+    finally:
+        app.animation._draw_was_started = True
+        plt.close(app.figure)
+
+
+def test_loading_invalid_gui_state_does_not_raise(tmp_path) -> None:
+    """An invalid GUI state reports an error instead of breaking the application."""
+
+    state_path = tmp_path / "invalid_gui_state.json"
+    state_path.write_text("{not-json", encoding="utf-8")
+    app = SkatingAerialAlignmentApp(gui_state_path=state_path)
+    try:
+        initial_tilt = app.sliders["tilt_rps"].val
+
+        app._load_gui_state(None)
+
+        assert app.sliders["tilt_rps"].val == pytest.approx(initial_tilt)
+        assert app.file_status_artist.get_text() == "Chargement impossible: JSONDecodeError"
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

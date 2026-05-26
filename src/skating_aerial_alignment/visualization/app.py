@@ -189,6 +189,8 @@ class SkatingAerialAlignmentApp:
     TEXT_SECONDARY = "#475467"
     DISPLAY_INTERVAL_ESTIMATE_MS = 33.0
     DEFAULT_GUI_STATE_PATH = Path("artifacts") / "gui_state.json"
+    RETUNE_PD_LABEL = "Retuner PD"
+    RETUNE_PD_BUSY_LABEL = "⟳ PD..."
 
     def __init__(
         self,
@@ -230,6 +232,7 @@ class SkatingAerialAlignmentApp:
         self._updating_gui_state = False
         self.playback_menu_visible = False
         self.playback_text_artist = None
+        self.file_status_artist = None
 
         self.figure = plt.figure(figsize=(16, 11), facecolor=self.FIGURE_BACKGROUND)
         self.figure.suptitle(
@@ -511,6 +514,15 @@ class SkatingAerialAlignmentApp:
             ha="right",
             va="top",
         )
+        self.file_status_artist = self.control_panels["modes"].text(
+            0.03,
+            0.035,
+            "",
+            fontsize=8.0,
+            color=self.TEXT_SECONDARY,
+            ha="left",
+            va="bottom",
+        )
 
         slider_specs = [
             (
@@ -589,7 +601,7 @@ class SkatingAerialAlignmentApp:
                 slider._zero_label = zero_label
 
         retune_pd_axis = self.figure.add_axes([0.685, 0.157, 0.110, 0.042])
-        self.retune_pd_button = Button(retune_pd_axis, "Retuner PD")
+        self.retune_pd_button = Button(retune_pd_axis, self.RETUNE_PD_LABEL)
         self._style_button(self.retune_pd_button, fill="#FFFFFF", edge="#B9C5D3")
         self.retune_pd_button.on_clicked(self._retune_pd_controller)
 
@@ -1259,9 +1271,22 @@ class SkatingAerialAlignmentApp:
             self.figure.canvas.draw_idle()
             return
 
-        self.parameters = self._apply_pd_tuning(self.parameters)
-        self.result = self.simulator.simulate(self.parameters)
-        self._refresh_from_result(reset_animation=True)
+        self._set_pd_tuning_busy(True)
+        try:
+            self.parameters = self._apply_pd_tuning(self.parameters)
+            self.result = self.simulator.simulate(self.parameters)
+            self._refresh_from_result(reset_animation=True)
+        finally:
+            self._set_pd_tuning_busy(False)
+
+    def _set_pd_tuning_busy(self, busy: bool) -> None:
+        """Display whether the explicit PD tuning operation is running."""
+
+        label = self.RETUNE_PD_BUSY_LABEL if busy else self.RETUNE_PD_LABEL
+        self.retune_pd_button.label.set_text(label)
+        self.retune_pd_button.label.set_color("#2E6FBB" if busy else self.TEXT_PRIMARY)
+        self.figure.canvas.draw_idle()
+        self.figure.canvas.flush_events()
 
     def _reset_controls(self, _event) -> None:
         """Restore the default slider values."""
@@ -1293,20 +1318,38 @@ class SkatingAerialAlignmentApp:
         """Save the current GUI state to a JSON file."""
 
         path = self._resolved_gui_state_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(self._serialize_gui_state(), indent=2),
-            encoding="utf-8",
-        )
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(self._serialize_gui_state(), indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            self._set_file_status(f"Sauvegarde impossible: {exc.strerror or exc}", error=True)
+            return
+        self._set_file_status(f"Etat sauvegarde: {path.name}")
 
     def _load_gui_state(self, _event) -> None:
         """Load one previously saved GUI state from JSON."""
 
         path = self._resolved_gui_state_path()
         if not path.exists():
+            self._set_file_status(f"Fichier absent: {path.name}", error=True)
             return
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            self._set_file_status(f"Chargement impossible: {type(exc).__name__}", error=True)
+            return
         self._apply_gui_state(payload)
+        self._set_file_status(f"Etat charge: {path.name}")
+
+    def _set_file_status(self, message: str, *, error: bool = False) -> None:
+        """Display compact feedback for GUI state file operations."""
+
+        self.file_status_artist.set_text(message)
+        self.file_status_artist.set_color("#9A4024" if error else "#1B6B4B")
+        self.figure.canvas.draw_idle()
 
     def _on_playback_change(self, label: str) -> None:
         """Update the playback speed from the speed selector."""
