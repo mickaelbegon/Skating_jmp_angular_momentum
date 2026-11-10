@@ -54,7 +54,7 @@ def test_gui_builds_without_display_side_effects() -> None:
         assert app.sliders["salto_rps"].label.get_text() == "σx eq. (rot/s)"
         assert app.sliders["tilt_rps"].label.get_text() == "σy eq. (rot/s)"
         assert app.sliders["twist_rps"].label.get_text() == "σz eq. (rot/s)"
-        assert len(app.stabilization_checkbox.get_status()) == 4
+        assert len(app.stabilization_checkbox.get_status()) == 5
         assert app._inward_tilt_optimization_enabled() is False
         assert app._alignment_optimization_enabled() is False
         assert app.time_slider.valmin == 0.0
@@ -113,7 +113,7 @@ def test_face_mode_recomputes_display_markers_with_zero_twist() -> None:
 
     app = SkatingAerialAlignmentApp()
     try:
-        app.stabilization_checkbox.set_active(1)
+        app.stabilization_checkbox.set_active(app.FACE_VIEW_INDEX)
         displayed_markers, _ = app._display_kinematics(0)
         expected_q = app.result.q[0].copy()
         expected_q[5] = 0.0
@@ -276,12 +276,26 @@ def test_pd_tuning_cache_is_reloaded_on_startup(tmp_path) -> None:
         plt.close(second_app.figure)
 
 
+def test_dynamic_compensation_enables_stabilization() -> None:
+    """The experimental mode activates stabilization and follows its state."""
+
+    app = SkatingAerialAlignmentApp()
+    try:
+        app.stabilization_checkbox.set_active(app.DYNAMIC_COMPENSATION_INDEX)
+        assert app._dynamic_compensation_enabled()
+        assert app._stabilization_enabled()
+        app.stabilization_checkbox.set_active(0)
+        assert not app._dynamic_compensation_enabled()
+    finally:
+        plt.close(app.figure)
+
+
 def test_enabling_inward_tilt_optimization_updates_the_slider_and_result() -> None:
     """Turning on inward-tilt optimization applies the optimized tilt to the scenario."""
 
     app = SkatingAerialAlignmentApp()
     try:
-        app.stabilization_checkbox.set_active(2)
+        app.stabilization_checkbox.set_active(app.TWIST_OPTIMIZATION_INDEX)
 
         assert app._inward_tilt_optimization_enabled() is True
         assert app.inward_tilt_optimization_result is not None
@@ -299,7 +313,7 @@ def test_enabling_alignment_optimization_updates_the_slider_and_result() -> None
 
     app = SkatingAerialAlignmentApp()
     try:
-        app.stabilization_checkbox.set_active(3)
+        app.stabilization_checkbox.set_active(app.ALIGNMENT_OPTIMIZATION_INDEX)
 
         assert app._alignment_optimization_enabled() is True
         assert app.alignment_optimization_result is not None
@@ -318,10 +332,10 @@ def test_disabling_alignment_optimization_resets_inward_tilt_to_zero() -> None:
 
     app = SkatingAerialAlignmentApp()
     try:
-        app.stabilization_checkbox.set_active(3)
+        app.stabilization_checkbox.set_active(app.ALIGNMENT_OPTIMIZATION_INDEX)
         assert app._alignment_optimization_enabled() is True
 
-        app.stabilization_checkbox.set_active(3)
+        app.stabilization_checkbox.set_active(app.ALIGNMENT_OPTIMIZATION_INDEX)
 
         assert app._alignment_optimization_enabled() is False
         assert app.sliders["inward_tilt"].val == pytest.approx(0.0)
@@ -339,7 +353,7 @@ def test_enabling_alignment_optimization_disables_trunk_stabilization() -> None:
         app.stabilization_checkbox.set_active(0)
         assert app._stabilization_enabled() is True
 
-        app.stabilization_checkbox.set_active(3)
+        app.stabilization_checkbox.set_active(app.ALIGNMENT_OPTIMIZATION_INDEX)
 
         assert app._alignment_optimization_enabled() is True
         assert app._stabilization_enabled() is False
@@ -354,11 +368,11 @@ def test_alignment_and_twist_optimization_modes_are_mutually_exclusive() -> None
 
     app = SkatingAerialAlignmentApp()
     try:
-        app.stabilization_checkbox.set_active(2)
+        app.stabilization_checkbox.set_active(app.TWIST_OPTIMIZATION_INDEX)
         assert app._inward_tilt_optimization_enabled() is True
         assert app._alignment_optimization_enabled() is False
 
-        app.stabilization_checkbox.set_active(3)
+        app.stabilization_checkbox.set_active(app.ALIGNMENT_OPTIMIZATION_INDEX)
 
         assert app._alignment_optimization_enabled() is True
         assert app._inward_tilt_optimization_enabled() is False
@@ -381,7 +395,7 @@ def test_gui_state_can_be_saved_and_loaded(tmp_path) -> None:
         app.sliders["somersault_tilt"].set_val(7.0)
         app.sliders["inward_tilt"].set_val(-12.0)
         app.stabilization_checkbox.set_active(0)
-        app.stabilization_checkbox.set_active(1)
+        app.stabilization_checkbox.set_active(app.FACE_VIEW_INDEX)
         app.playback_selector.set_active(1)
         saved_time = float(app.result.time[len(app.result.time) // 3])
         app.time_slider.set_val(saved_time)
@@ -405,7 +419,7 @@ def test_gui_state_can_be_saved_and_loaded(tmp_path) -> None:
         app.sliders["somersault_tilt"].set_val(0.0)
         app.sliders["inward_tilt"].set_val(8.0)
         app.stabilization_checkbox.set_active(0)
-        app.stabilization_checkbox.set_active(1)
+        app.stabilization_checkbox.set_active(app.FACE_VIEW_INDEX)
         app.playback_selector.set_active(0)
 
         app._load_gui_state(None)

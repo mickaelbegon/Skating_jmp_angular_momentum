@@ -113,7 +113,12 @@ def format_status_text(
 ) -> str:
     """Format the textual simulation summary shown above the plots."""
 
-    controller_label = "PD actif" if parameters.stabilize_trunk else "tronc passif"
+    if parameters.stabilize_trunk and parameters.use_dynamic_compensation:
+        controller_label = "PD + comp. dyn. (exp.)"
+    elif parameters.stabilize_trunk:
+        controller_label = "PD actif"
+    else:
+        controller_label = "tronc passif"
     backward_distance = abs(parameters.backward_horizontal_velocity) * result.flight_time
     return (
         f"Tvol {result.flight_time:.3f} s | "
@@ -146,6 +151,8 @@ def format_inertia_and_controller_text(
             f"PD auto J={optimization_result.objective_value:.2e} "
             f"({optimization_result.evaluations} eval.)"
         )
+    if parameters.stabilize_trunk and parameters.use_dynamic_compensation:
+        optimization_text += " + comp. dyn. exp."
     tilt_optimization_text = "incl. int. manuelle"
     if alignment_optimization_result is not None:
         tilt_optimization_text = (
@@ -177,8 +184,11 @@ class SkatingAerialAlignmentApp:
     DEFAULT_VIEW = (18.0, -70.0)
     FACE_VIEW = (8.0, 90.0)
     DEFAULT_BACKWARD_VELOCITY_M_S = 2.0
-    TWIST_OPTIMIZATION_INDEX = 2
-    ALIGNMENT_OPTIMIZATION_INDEX = 3
+    DYNAMIC_COMPENSATION_INDEX = 1
+    FACE_VIEW_INDEX = 2
+    TWIST_OPTIMIZATION_INDEX = 3
+    ALIGNMENT_OPTIMIZATION_INDEX = 4
+    DYNAMIC_COMPENSATION_LABEL = "Comp. dyn. (exp.)"
     TWIST_OPTIMIZATION_LABEL = "Optimiser incl. int."
     ALIGNMENT_OPTIMIZATION_LABEL = "Optimiser alignement"
     PRIMARY_BLUE = "#2E6FBB"
@@ -640,7 +650,7 @@ class SkatingAerialAlignmentApp:
         self._style_button(self.speed_button, fill="#FFFFFF", edge="#B9C5D3")
         self.speed_button.on_clicked(self._toggle_playback_menu)
 
-        checkbox_axis = self.figure.add_axes([0.71, 0.055, 0.24, 0.088])
+        checkbox_axis = self.figure.add_axes([0.71, 0.040, 0.24, 0.104])
         checkbox_axis.set_facecolor("none")
         for spine in checkbox_axis.spines.values():
             spine.set_visible(False)
@@ -648,11 +658,12 @@ class SkatingAerialAlignmentApp:
             checkbox_axis,
             labels=[
                 "Stabiliser le tronc",
+                self.DYNAMIC_COMPENSATION_LABEL,
                 "Avatar de face (vrille=0)",
                 self.TWIST_OPTIMIZATION_LABEL,
                 self.ALIGNMENT_OPTIMIZATION_LABEL,
             ],
-            actives=[False, False, False, False],
+            actives=[False, False, False, False, False],
         )
         self._style_checkboxes(self.stabilization_checkbox)
         self.stabilization_checkbox.on_clicked(self._on_parameter_change)
@@ -910,6 +921,7 @@ class SkatingAerialAlignmentApp:
             somersault_tilt_deg=self.sliders["somersault_tilt"].val,
             inward_tilt_deg=self.sliders["inward_tilt"].val,
             stabilize_trunk=self._stabilization_enabled(),
+            use_dynamic_compensation=self._dynamic_compensation_enabled(),
         )
 
     def _parameter_signature_for_tuning(
@@ -924,6 +936,7 @@ class SkatingAerialAlignmentApp:
             parameters.backward_horizontal_velocity,
             parameters.somersault_tilt_deg,
             parameters.inward_tilt_deg,
+            float(parameters.use_dynamic_compensation),
             *parameters.initial_trunk_angles_deg,
             *parameters.initial_trunk_velocity_deg_s,
         )
@@ -942,6 +955,7 @@ class SkatingAerialAlignmentApp:
             *parameters.initial_trunk_angles_deg,
             *parameters.initial_trunk_velocity_deg_s,
             float(parameters.stabilize_trunk),
+            float(parameters.use_dynamic_compensation),
             *parameters.controller.proportional_gains,
             *parameters.controller.derivative_gains,
         )
@@ -960,6 +974,7 @@ class SkatingAerialAlignmentApp:
             *parameters.initial_trunk_angles_deg,
             *parameters.initial_trunk_velocity_deg_s,
             float(parameters.stabilize_trunk),
+            float(parameters.use_dynamic_compensation),
             *parameters.controller.proportional_gains,
             *parameters.controller.derivative_gains,
         )
@@ -1030,6 +1045,7 @@ class SkatingAerialAlignmentApp:
             "sliders": {name: float(slider.val) for name, slider in self.sliders.items()},
             "checkboxes": {
                 "stabilize_trunk": self._stabilization_enabled(),
+                "dynamic_compensation": self._dynamic_compensation_enabled(),
                 "face_view": self._face_view_enabled(),
                 "optimize_inward_tilt": self._inward_tilt_optimization_enabled(),
                 "optimize_alignment": self._alignment_optimization_enabled(),
@@ -1071,7 +1087,14 @@ class SkatingAerialAlignmentApp:
                             break
 
             self._set_checkbox_state(0, bool(checkbox_values.get("stabilize_trunk", False)))
-            self._set_checkbox_state(1, bool(checkbox_values.get("face_view", False)))
+            self._set_checkbox_state(
+                self.DYNAMIC_COMPENSATION_INDEX,
+                bool(checkbox_values.get("dynamic_compensation", False)),
+            )
+            self._set_checkbox_state(
+                self.FACE_VIEW_INDEX,
+                bool(checkbox_values.get("face_view", False)),
+            )
             self._set_checkbox_state(
                 self.TWIST_OPTIMIZATION_INDEX,
                 bool(checkbox_values.get("optimize_inward_tilt", False)),
@@ -1080,6 +1103,11 @@ class SkatingAerialAlignmentApp:
                 self.ALIGNMENT_OPTIMIZATION_INDEX,
                 bool(checkbox_values.get("optimize_alignment", False)),
             )
+            if self._alignment_optimization_enabled():
+                self._set_checkbox_state(0, False)
+                self._set_checkbox_state(self.DYNAMIC_COMPENSATION_INDEX, False)
+            elif self._dynamic_compensation_enabled():
+                self._set_checkbox_state(0, True)
         finally:
             self._updating_gui_state = False
 
@@ -1096,13 +1124,19 @@ class SkatingAerialAlignmentApp:
         return self.gui_state_path.expanduser()
 
     def _synchronize_optimization_mode_checkboxes(self, changed_value) -> None:
-        """Keep the two inward-tilt optimization modes mutually exclusive."""
+        """Keep compatible stabilization and inward-tilt modes selected."""
 
         if self._updating_checkbox_state or not isinstance(changed_value, str):
             return
+        if changed_value == self.DYNAMIC_COMPENSATION_LABEL:
+            if self._dynamic_compensation_enabled():
+                self._set_checkbox_state(0, True)
+        elif changed_value == "Stabiliser le tronc" and not self._stabilization_enabled():
+            self._set_checkbox_state(self.DYNAMIC_COMPENSATION_INDEX, False)
         if changed_value == self.ALIGNMENT_OPTIMIZATION_LABEL:
             if self._alignment_optimization_enabled():
                 self._set_checkbox_state(0, False)
+                self._set_checkbox_state(self.DYNAMIC_COMPENSATION_INDEX, False)
             else:
                 self._set_inward_tilt_slider_value(0.0)
         if (
@@ -1546,7 +1580,12 @@ class SkatingAerialAlignmentApp:
     def _face_view_enabled(self) -> bool:
         """Return whether the front-view rendering mode is enabled."""
 
-        return self._checkbox_enabled(1)
+        return self._checkbox_enabled(self.FACE_VIEW_INDEX)
+
+    def _dynamic_compensation_enabled(self) -> bool:
+        """Return whether experimental dynamic compensation is enabled."""
+
+        return self._checkbox_enabled(self.DYNAMIC_COMPENSATION_INDEX)
 
     def _inward_tilt_optimization_enabled(self) -> bool:
         """Return whether inward tilt should be optimized to maximize twist."""

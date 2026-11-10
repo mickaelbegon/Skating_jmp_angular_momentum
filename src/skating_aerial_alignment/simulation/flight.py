@@ -41,6 +41,7 @@ class FlightSimulationParameters:
     initial_trunk_angles_deg: tuple[float, float, float] = (0.0, 0.0, 0.0)
     initial_trunk_velocity_deg_s: tuple[float, float, float] = (0.0, 0.0, 0.0)
     stabilize_trunk: bool = False
+    use_dynamic_compensation: bool = False
     controller: PDControllerConfiguration = field(default_factory=PDControllerConfiguration)
     sample_count: int = 201
 
@@ -195,8 +196,9 @@ class SkaterFlightSimulator:
         configuration: PDControllerConfiguration,
         *,
         enabled: bool,
+        feedforward_torques: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Return the generalized torques that stabilize the trunk toward zero."""
+        """Return clipped PD torques, optionally augmented by feedforward effort."""
 
         if not enabled:
             return np.zeros(TRUNK_DOF, dtype=float)
@@ -206,8 +208,53 @@ class SkaterFlightSimulator:
         kp = np.asarray(configuration.proportional_gains, dtype=float)
         kd = np.asarray(configuration.derivative_gains, dtype=float)
         limits = np.asarray(configuration.torque_limits, dtype=float)
-        raw_torques = -kp * q_trunk - kd * qdot_trunk
+        feedforward = (
+            np.zeros(TRUNK_DOF, dtype=float)
+            if feedforward_torques is None
+            else np.asarray(feedforward_torques, dtype=float)
+        )
+        raw_torques = feedforward - kp * q_trunk - kd * qdot_trunk
         return np.clip(raw_torques, -limits, limits)
+
+    def dynamic_compensation_torques(self, q: np.ndarray, qdot: np.ndarray) -> np.ndarray:
+        """Return feedforward torques that target zero trunk acceleration.
+
+        The floating root remains unactuated. Its compatible acceleration is
+        solved first, then the trunk torque required by the multibody dynamics
+        is recovered from the actuated rows of the equation of motion.
+        """
+
+        q_biorbd = biorbd.GeneralizedCoordinates(np.asarray(q, dtype=float))
+        qdot_biorbd = biorbd.GeneralizedVelocity(np.asarray(qdot, dtype=float))
+        mass_matrix = self.model.massMatrix(q_biorbd).to_array()
+        nonlinear_effects = self.model.NonLinearEffect(q_biorbd, qdot_biorbd).to_array()
+        root_acceleration = np.linalg.solve(
+            mass_matrix[:ROOT_DOF, :ROOT_DOF],
+            -nonlinear_effects[:ROOT_DOF],
+        )
+        target_acceleration = np.zeros(self.model.nbQddot(), dtype=float)
+        target_acceleration[:ROOT_DOF] = root_acceleration
+        required_torques = mass_matrix @ target_acceleration + nonlinear_effects
+        return required_torques[ROOT_DOF : ROOT_DOF + TRUNK_DOF]
+
+    def trunk_actuation_torques(
+        self,
+        q: np.ndarray,
+        qdot: np.ndarray,
+        parameters: FlightSimulationParameters,
+    ) -> np.ndarray:
+        """Return the configured feedback/feedforward effort for the trunk."""
+
+        feedforward = None
+        if parameters.stabilize_trunk and parameters.use_dynamic_compensation:
+            feedforward = self.dynamic_compensation_torques(q, qdot)
+        return self.controller_torques(
+            q[6:9],
+            qdot[6:9],
+            parameters.controller,
+            enabled=parameters.stabilize_trunk,
+            feedforward_torques=feedforward,
+        )
 
     def markers(self, q: np.ndarray) -> np.ndarray:
         """Return the marker cloud of the current configuration."""
@@ -573,7 +620,12 @@ class SkaterFlightSimulator:
             equivalent_angular_momentum=desired_angular_momentum_world,
         )
 
-    def trunk_tracking_objective(self, result: FlightSimulationResult) -> float:
+    def trunk_tracking_objective(
+        self,
+        result: FlightSimulationResult,
+        *,
+        terminal_weight_scale: float = 1.0,
+    ) -> float:
         """Return the scalar objective used to assess trunk stabilization quality."""
 
         trunk_angles = result.q[:, 6:9]
@@ -589,7 +641,7 @@ class SkaterFlightSimulator:
             velocity_cost = float(np.trapezoid(np.sum(trunk_velocities**2, axis=1), time))
             torque_cost = float(np.trapezoid(np.sum(trunk_torques**2, axis=1), time))
 
-        terminal_cost = float(
+        terminal_cost = float(terminal_weight_scale) * float(
             10.0 * np.sum(trunk_angles[-1] ** 2) + 2.0 * np.sum(trunk_velocities[-1] ** 2)
         )
         return angle_cost + 0.2 * velocity_cost + 1e-4 * torque_cost + terminal_cost
@@ -642,7 +694,11 @@ class SkaterFlightSimulator:
             )
             candidate_parameters = replace(base_parameters, controller=controller)
             result = self.simulate(candidate_parameters)
-            return self.trunk_tracking_objective(result)
+            terminal_weight_scale = 5.0 if candidate_parameters.use_dynamic_compensation else 1.0
+            return self.trunk_tracking_objective(
+                result,
+                terminal_weight_scale=terminal_weight_scale,
+            )
 
         optimization = minimize(
             objective,
@@ -755,12 +811,7 @@ class SkaterFlightSimulator:
         qdot[3:9] = state[ROTATION_STATE_DOF:]
 
         tau = np.zeros(self.model.nbGeneralizedTorque(), dtype=float)
-        tau[6:9] = self.controller_torques(
-            q[6:9],
-            qdot[6:9],
-            parameters.controller,
-            enabled=parameters.stabilize_trunk,
-        )
+        tau[6:9] = self.trunk_actuation_torques(q, qdot, parameters)
 
         qddot = self.model.ForwardDynamics(
             biorbd.GeneralizedCoordinates(q),
@@ -784,11 +835,10 @@ class SkaterFlightSimulator:
         for frame_index in range(time.size):
             q[frame_index, 3:9] = state_history[:ROTATION_STATE_DOF, frame_index]
             qdot[frame_index, 3:9] = state_history[ROTATION_STATE_DOF:, frame_index]
-            tau[frame_index, 6:9] = self.controller_torques(
-                q[frame_index, 6:9],
-                qdot[frame_index, 6:9],
-                parameters.controller,
-                enabled=parameters.stabilize_trunk,
+            tau[frame_index, 6:9] = self.trunk_actuation_torques(
+                q[frame_index],
+                qdot[frame_index],
+                parameters,
             )
 
         return q, qdot, tau

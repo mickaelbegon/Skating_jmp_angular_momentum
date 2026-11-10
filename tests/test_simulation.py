@@ -54,6 +54,41 @@ def test_controller_torques_oppose_trunk_deviation() -> None:
     assert np.allclose(torques, np.array([-10.0, 5.0, -2.0]))
 
 
+def test_dynamic_compensation_cancels_spin_induced_trunk_acceleration() -> None:
+    """Feedforward compensation holds a neutral trunk against free-flight coupling."""
+
+    simulator = SkaterFlightSimulator()
+    parameters = FlightSimulationParameters(
+        angular_velocity_rps=(0.0, 0.0, 3.0),
+        stabilize_trunk=True,
+        use_dynamic_compensation=True,
+    )
+    q = simulator.initial_generalized_coordinates(parameters)
+    qdot, _ = simulator.full_initial_velocity(parameters)
+    state = np.concatenate((q[3:9], qdot[3:9]))
+
+    derivative = simulator._dynamics(0.0, state, parameters)
+
+    assert np.linalg.norm(derivative[-3:]) < 1e-8
+
+
+def test_dynamic_compensation_reduces_terminal_trunk_drift() -> None:
+    """The experimental controller reduces terminal drift for a neutral spinning trunk."""
+
+    simulator = SkaterFlightSimulator()
+    parameters = FlightSimulationParameters(
+        angular_velocity_rps=(0.0, 0.0, 3.0),
+        stabilize_trunk=True,
+        sample_count=41,
+    )
+
+    pd_result = simulator.simulate(parameters)
+    compensated_result = simulator.simulate(replace(parameters, use_dynamic_compensation=True))
+
+    assert np.linalg.norm(compensated_result.q[-1, 6:9]) < np.linalg.norm(pd_result.q[-1, 6:9])
+    assert np.linalg.norm(compensated_result.q[-1, 6:9]) < 1e-8
+
+
 def test_angular_momentum_components_are_defined_in_the_global_frame() -> None:
     """The requested momentum components are interpreted directly in the global frame."""
 

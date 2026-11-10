@@ -65,6 +65,10 @@ def _parameters_from_payload(payload: dict[str, Any]) -> FlightSimulationParamet
         payload["sample_count"] = int(payload["sample_count"])
     if "stabilize_trunk" in payload:
         payload["stabilize_trunk"] = bool(payload["stabilize_trunk"])
+    if "use_dynamic_compensation" in payload:
+        payload["use_dynamic_compensation"] = bool(payload["use_dynamic_compensation"])
+        if payload["use_dynamic_compensation"]:
+            payload["stabilize_trunk"] = True
     return replace(parameters, **payload)
 
 
@@ -88,7 +92,8 @@ def _parameters_from_arguments(arguments: argparse.Namespace) -> FlightSimulatio
         initial_trunk_velocity_deg_s=tuple(
             float(value) for value in arguments.initial_trunk_velocity_deg_s
         ),
-        stabilize_trunk=bool(arguments.stabilize_trunk),
+        stabilize_trunk=bool(arguments.stabilize_trunk or arguments.dynamic_compensation),
+        use_dynamic_compensation=bool(arguments.dynamic_compensation),
         controller=controller,
         sample_count=int(arguments.sample_count),
     )
@@ -403,6 +408,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--stabilize-trunk",
         action="store_true",
         help="Enable the trunk PD controller.",
+    )
+    simulate_parser.add_argument(
+        "--dynamic-compensation",
+        action="store_true",
+        help="Enable experimental dynamic feedforward compensation with trunk stabilization.",
     )
     simulate_parser.add_argument(
         "--kp",
