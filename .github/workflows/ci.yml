@@ -11,17 +11,24 @@ on:
 jobs:
   lint-and-tests:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Conda
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: pyproject.toml
+          channels: conda-forge
+          channel-priority: strict
+          activate-environment: skating-ci
+
+      - name: Install biorbd
+        run: conda install -y biorbd
 
       - name: Install project and test dependencies
         run: |
@@ -78,6 +85,9 @@ jobs:
     needs: lint-and-tests
     if: ${{ needs.lint-and-tests.result == 'success' }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
     strategy:
       fail-fast: false
       matrix:
@@ -87,23 +97,27 @@ jobs:
             path: dist/SkatingAerialAlignment
           - os: macos-latest
             artifact: skating-aerial-alignment-macos
-            path: dist/SkatingAerialAlignment.app
+            path: dist/SkatingAerialAlignment-macos.zip
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Conda
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: pyproject.toml
+          channels: conda-forge
+          channel-priority: strict
+          activate-environment: skating-ci
+
+      - name: Install native dependencies
+        run: conda install -y biorbd pyinstaller
 
       - name: Install packaging dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e . pyinstaller biorbd
+          python -m pip install -e .
 
       - name: Build GUI executable
         run: >-
@@ -117,6 +131,10 @@ jobs:
           --collect-all biorbd
           --collect-all matplotlib
           skating_aerial_alignment_gui.py
+
+      - name: Archive macOS application
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent dist/SkatingAerialAlignment.app dist/SkatingAerialAlignment-macos.zip
 
       - name: Upload GUI artifact
         uses: actions/upload-artifact@v4
