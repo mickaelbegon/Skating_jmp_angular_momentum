@@ -79,12 +79,16 @@ python -m pip install -e .[test]
 
 ### 4. Installer `biorbd`
 
-Le projet a besoin de `biorbd`. Comme son installation dépend souvent de
-l'environnement scientifique déjà utilisé, gardez votre méthode habituelle si
-vous en avez une.
+`biorbd` est installé automatiquement par la commande pip précédente. Pour
+l'installer séparément :
 
-Si `biorbd` n'est pas encore installé dans votre environnement, il faut
-l'ajouter avant de lancer le projet.
+```bash
+python -m pip install 'biorbd>=1.13.0,<1.14'
+```
+
+Les wheels de la version 1.13.0 prennent notamment en charge Windows x86-64,
+Linux x86-64 et macOS Apple Silicon. Sur macOS Intel, vérifiez la disponibilité
+d'une version compatible ou utilisez un environnement Conda adapté.
 
 ### 5. Vérifier que tout marche
 

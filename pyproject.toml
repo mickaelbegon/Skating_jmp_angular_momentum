@@ -16,6 +16,7 @@ authors = [
     { name = "mickaelbegon" },
 ]
 dependencies = [
+    "biorbd>=1.13.0,<1.14",
     "numpy>=1.25",
     "scipy>=1.11",
     "matplotlib>=3.8",

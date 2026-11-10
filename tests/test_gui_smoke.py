@@ -177,15 +177,13 @@ def test_enabling_stabilization_does_not_auto_tune_pd_controller() -> None:
         assert app.parameters.stabilize_trunk is True
         assert app.optimization_result is None
         assert app.parameters.controller == initial_controller
-        assert not mcolors.same_color(
-            app.stabilization_checkbox._checks.get_facecolor()[0],
-            mcolors.to_rgba("none"),
-        )
+        checkbox = app.stabilization_checkbox
+        checks = getattr(checkbox, "_checks", None)
+        if checks is None:
+            checks = checkbox._buttons
+        assert not mcolors.same_color(checks.get_facecolor()[0], mcolors.to_rgba("none"))
         app.stabilization_checkbox.set_active(0)
-        assert mcolors.same_color(
-            app.stabilization_checkbox._checks.get_facecolor()[0],
-            mcolors.to_rgba("none"),
-        )
+        assert mcolors.same_color(checks.get_facecolor()[0], mcolors.to_rgba("none"))
     finally:
         app.animation._draw_was_started = True
         plt.close(app.figure)

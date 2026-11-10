@@ -11,24 +11,17 @@ on:
 jobs:
   lint-and-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash -el {0}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Conda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          channels: conda-forge
-          channel-priority: strict
-          activate-environment: skating-ci
-
-      - name: Install biorbd
-        run: conda install -y biorbd
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install project and test dependencies
         run: |
@@ -85,9 +78,6 @@ jobs:
     needs: lint-and-tests
     if: ${{ needs.lint-and-tests.result == 'success' }}
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash -el {0}
     strategy:
       fail-fast: false
       matrix:
@@ -103,21 +93,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Conda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          channels: conda-forge
-          channel-priority: strict
-          activate-environment: skating-ci
-
-      - name: Install native dependencies
-        run: conda install -y biorbd pyinstaller
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       - name: Install packaging dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
+          python -m pip install -e . pyinstaller
 
       - name: Build GUI executable
         run: >-

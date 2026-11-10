@@ -48,12 +48,15 @@ class SafeCheckButtons(CheckButtons):
 
         super().set_active(index, state)
         invisible = mcolors.to_rgba("none")
-        facecolors = self._checks.get_facecolor()
+        checks = getattr(self, "_checks", None)
+        if checks is None:
+            checks = self._buttons
+        facecolors = checks.get_facecolor()
         edgecolors = np.asarray(facecolors).copy()
         for color_index, color in enumerate(facecolors):
             if mcolors.same_color(color, invisible):
                 edgecolors[color_index] = invisible
-        self._checks.set_edgecolor(edgecolors)
+        checks.set_edgecolor(edgecolors)
 
 
 class SafeRadioButtons(RadioButtons):
@@ -755,8 +758,11 @@ class SkatingAerialAlignmentApp:
             checkbox._frames.set_facecolors(np.tile([[1.0, 1.0, 1.0, 1.0]], (item_count, 1)))
             checkbox._frames.set_edgecolors(np.tile([[0.56, 0.63, 0.70, 1.0]], (item_count, 1)))
             checkbox._frames.set_linewidths(np.full(item_count, 1.0))
-        if hasattr(checkbox, "_checks"):
-            checkbox._checks.set_sizes(np.full(item_count, 60.0))
+        checks = getattr(checkbox, "_checks", None)
+        if checks is None:
+            checks = getattr(checkbox, "_buttons", None)
+        if checks is not None:
+            checks.set_sizes(np.full(item_count, 60.0))
             checkbox._active_check_colors = np.tile([[0.18, 0.44, 0.73, 1.0]], (item_count, 1))
             current_status = list(checkbox.get_status())
             invisible = mcolors.to_rgba("none")
@@ -766,9 +772,9 @@ class SkatingAerialAlignmentApp:
                     for index in range(item_count)
                 ]
             )
-            checkbox._checks.set_facecolor(facecolors)
-            checkbox._checks.set_edgecolor(facecolors)
-            checkbox._checks.set_linewidths(np.full(item_count, 1.4))
+            checks.set_facecolor(facecolors)
+            checks.set_edgecolor(facecolors)
+            checks.set_linewidths(np.full(item_count, 1.4))
 
     def _style_radio_buttons(self, radio: SafeRadioButtons) -> None:
         """Style the playback-speed popup menu consistently with the control cards."""
